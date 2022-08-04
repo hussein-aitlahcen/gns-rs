@@ -1,0 +1,2 @@
+[workspace]
+members = [ "gns-sys", "gns", "example" ]

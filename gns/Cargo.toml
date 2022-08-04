@@ -1,0 +1,9 @@
+[package]
+name = "gns"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gns-sys = { path = "../gns-sys" }
+crossbeam-queue = "0.3"
+lazy_static = "1.4"
