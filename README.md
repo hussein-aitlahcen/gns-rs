@@ -1,6 +1,6 @@
-# Rust wrapper for [Valve GameNetworkingSockets](https://github.com/ValveSoftware/GameNetworkingSockets)
+# Rust abstraction for [Valve GameNetworkingSockets](https://github.com/ValveSoftware/GameNetworkingSockets)
 
-Simple, high-level and type-safe wrapper for [Valve GameNetworkingSockets](https://github.com/ValveSoftware/GameNetworkingSockets).
+Simple, high-level and (somehow) type-safe wrapper for [Valve GameNetworkingSockets](https://github.com/ValveSoftware/GameNetworkingSockets).
 
 Some features might be missing, if you are interested to introduce more abstraction, feel free to open a PR/Issue.
 
