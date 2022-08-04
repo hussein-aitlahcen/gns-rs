@@ -6,6 +6,10 @@ Libraries:
 - `gns-sys` is C++ library from Valve compiled with bindings generated.
 - `gns` is the high level Rust wrapper.
 
+System libraries required:
+- `protobuf`
+- `openssl`
+
 [Have a look at the chat client/server implementation](./example/src/main.rs)
 
 ## Reliable chat server
