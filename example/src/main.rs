@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     net::Ipv6Addr,
     sync::mpsc::{self, Receiver},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 // **unwrap** must be banned in production. unless you **know** what you are doing.
@@ -39,8 +39,26 @@ fn server(port: u16) {
         ESteamNetworkingSocketsDebugOutputType::k_ESteamNetworkingSocketsDebugOutputType_Everything,
     );
 
-    // Wait until the end of the universe
+    let mut last_update = Instant::now();
     loop {
+        let now = Instant::now();
+        let elapsed = now - last_update;
+        if elapsed.as_secs() > 10 {
+            last_update = now;
+            for (client, nick) in connected_clients.clone().into_iter() {
+                let info = server.get_connection_info(client).unwrap();
+                let (status, _) = server.get_connection_real_time_status(client, 0).unwrap();
+                println!(
+                  "== Client {:#?}\n\tIP: {:#?}\n\tPing: {:#?}\n\tOut/sec: {:#?}\n\tIn/sec: {:#?}",
+                    nick,
+                    info.remote_address(),
+                    status.ping(),
+                    status.out_bytes_per_sec(),
+                    status.in_bytes_per_sec(),
+                );
+            }
+        }
+
         // Poll internal callbacks
         server.poll_callbacks();
 
@@ -48,6 +66,7 @@ fn server(port: u16) {
         // We first build a list of messages and then send them.
         let broadcast_chat = |clients: Vec<GnsConnection>, title: &str, content: &str| {
             let messages = clients
+                .clone()
                 .into_iter()
                 .map(|client| {
                     server.utils().allocate_message(
@@ -70,7 +89,7 @@ fn server(port: u16) {
             ) => {
               let result = server.accept(event.connection());
               println!("GnsSocket<Server>: accepted new client: {:#?}.", result);
-              if result == EResult::k_EResultOK {
+              if result.is_ok() {
                 connected_clients.insert(event.connection(), nonce.to_string());
                 broadcast_chat(
                   connected_clients.keys().copied().collect(),
@@ -132,15 +151,15 @@ fn server(port: u16) {
 }
 
 fn user_input() -> Receiver<String> {
-  let (tx, rx) = mpsc::channel();
-  std::thread::spawn(move || loop {
-    let mut line = String::new();
-    // **unwrap** must be banned in production.
-    std::io::stdin().read_line(&mut line).unwrap();
-    // **unwrap** must be banned in production.
-    tx.send(line).unwrap();
-  });
-  rx
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || loop {
+        let mut line = String::new();
+        // **unwrap** must be banned in production.
+        std::io::stdin().read_line(&mut line).unwrap();
+        // **unwrap** must be banned in production.
+        tx.send(line).unwrap();
+    });
+    rx
 }
 
 // Everything is pretty similar to the server.
@@ -202,10 +221,10 @@ fn client(port: u16) {
         }
 
         for input in user_input_stream.try_iter() {
-            if input.trim() == "quit" {
+            let input = input.trim();
+            if input == "quit" {
                 break 'a;
             }
-
             client.send_messages(&[client.utils().allocate_message(
                 client.connection(),
                 k_nSteamNetworkingSend_Reliable,
