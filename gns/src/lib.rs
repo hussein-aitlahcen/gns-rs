@@ -1,12 +1,37 @@
 use crossbeam_queue::SegQueue;
+use either::Either;
 pub use gns_sys::bindings::*;
 use std::{
     ffi::{c_void, CStr, CString},
     marker::PhantomData,
+    mem::MaybeUninit,
     net::Ipv6Addr,
     pin::Pin,
     sync::atomic::AtomicBool,
 };
+
+pub type GnsMessageNumber = u64;
+
+pub type GnsResult<T> = Result<T, EResult>;
+
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GnsError(EResult);
+
+impl GnsError {
+    pub fn into_result(self) -> GnsResult<()> {
+        self.into()
+    }
+}
+
+impl From<GnsError> for GnsResult<()> {
+    fn from(GnsError(result): GnsError) -> Self {
+        match result {
+            EResult::k_EResultOK => Ok(()),
+            e => Err(e),
+        }
+    }
+}
 
 static GNS_INIT: AtomicBool = AtomicBool::new(false);
 
@@ -33,7 +58,7 @@ impl GnsGlobal {
             return Err("Only one handle of GnsGlobal must be held by a program. If the value is dropped, another handle might be created.".into());
         }
         unsafe {
-            let mut error: SteamDatagramErrMsg = core::mem::zeroed();
+            let mut error: SteamDatagramErrMsg = MaybeUninit::zeroed().assume_init();
             if !GameNetworkingSockets_Init(core::ptr::null(), &mut error) {
                 GNS_INIT.store(false, std::sync::atomic::Ordering::SeqCst);
                 Err(format!(
@@ -152,8 +177,21 @@ impl IsReady for IsClient {
     }
 }
 
-pub struct ToSend;
-pub struct ToReceive;
+pub trait MayDrop {
+    const MUST_DROP: bool;
+}
+
+pub struct ToSend(());
+
+impl MayDrop for ToSend {
+    const MUST_DROP: bool = false;
+}
+
+pub struct ToReceive(());
+
+impl MayDrop for ToReceive {
+    const MUST_DROP: bool = true;
+}
 
 pub type Priority = u32;
 pub type Weight = u16;
@@ -161,9 +199,25 @@ pub type GnsLane = (Priority, Weight);
 pub type GnsLaneId = u16;
 
 #[repr(transparent)]
-pub struct GnsNetworkMessage<T>(*mut ISteamNetworkingMessage, PhantomData<T>);
+pub struct GnsNetworkMessage<T: MayDrop>(*mut ISteamNetworkingMessage, PhantomData<T>);
 
-impl<T> GnsNetworkMessage<T> {
+impl<T> Drop for GnsNetworkMessage<T>
+where
+    T: MayDrop,
+{
+    fn drop(&mut self) {
+        if T::MUST_DROP && !self.0.is_null() {
+            unsafe {
+                SteamAPI_SteamNetworkingMessage_t_Release(self.0);
+            }
+        }
+    }
+}
+
+impl<T> GnsNetworkMessage<T>
+where
+    T: MayDrop,
+{
     #[inline]
     pub unsafe fn into_inner(self) -> *mut ISteamNetworkingMessage {
         self.0
@@ -177,8 +231,8 @@ impl<T> GnsNetworkMessage<T> {
     }
 
     #[inline]
-    pub fn message_number(&self) -> int64 {
-        unsafe { (*self.0).m_nMessageNumber }
+    pub fn message_number(&self) -> u64 {
+        unsafe { (*self.0).m_nMessageNumber as _ }
     }
 
     #[inline]
@@ -187,13 +241,13 @@ impl<T> GnsNetworkMessage<T> {
     }
 
     #[inline]
-    pub fn flags(&self) -> i32 {
-        unsafe { (*self.0).m_nFlags }
+    pub fn flags(&self) -> u32 {
+        unsafe { (*self.0).m_nFlags as _ }
     }
 
     #[inline]
-    pub fn user_data(&self) -> i64 {
-        unsafe { (*self.0).m_nUserData }
+    pub fn user_data(&self) -> u64 {
+        unsafe { (*self.0).m_nUserData as _ }
     }
 
     #[inline]
@@ -201,8 +255,8 @@ impl<T> GnsNetworkMessage<T> {
         GnsConnection(unsafe { (*self.0).m_conn })
     }
 
-    pub fn connection_user_data(&self) -> int64 {
-        unsafe { (*self.0).m_nConnUserData }
+    pub fn connection_user_data(&self) -> u64 {
+        unsafe { (*self.0).m_nConnUserData as _ }
     }
 }
 
@@ -246,13 +300,13 @@ impl GnsNetworkMessage<ToSend> {
 
     #[inline]
     pub fn set_flags(self, flags: i32) -> Self {
-        unsafe { (*self.0).m_nFlags = flags }
+        unsafe { (*self.0).m_nFlags = flags as _ }
         self
     }
 
     #[inline]
-    pub fn set_user_data(self, userdata: i64) -> Self {
-        unsafe { (*self.0).m_nUserData = userdata }
+    pub fn set_user_data(self, userdata: u64) -> Self {
+        unsafe { (*self.0).m_nUserData = userdata as _ }
         self
     }
 }
@@ -278,11 +332,6 @@ impl GnsConnectionInfo {
     }
 
     #[inline]
-    pub fn user_data(&self) -> int64 {
-        self.0.m_nUserData
-    }
-
-    #[inline]
     pub fn remote_address(&self) -> Ipv6Addr {
         Ipv6Addr::from(unsafe { self.0.m_addrRemote.__bindgen_anon_1.m_ipv6 })
     }
@@ -290,6 +339,81 @@ impl GnsConnectionInfo {
     #[inline]
     pub fn remote_port(&self) -> u16 {
         self.0.m_addrRemote.m_port
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
+pub struct GnsConnectionRealTimeLaneStatus(SteamNetConnectionRealTimeLaneStatus_t);
+
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+pub struct GnsConnectionRealTimeStatus(SteamNetConnectionRealTimeStatus_t);
+
+impl GnsConnectionRealTimeStatus {
+    #[inline]
+    pub fn state(&self) -> ESteamNetworkingConnectionState {
+        self.0.m_eState
+    }
+
+    #[inline]
+    pub fn ping(&self) -> u32 {
+        self.0.m_nPing as _
+    }
+
+    #[inline]
+    pub fn quality_local(&self) -> f32 {
+        self.0.m_flConnectionQualityLocal
+    }
+
+    #[inline]
+    pub fn quality_remote(&self) -> f32 {
+        self.0.m_flConnectionQualityRemote
+    }
+
+    #[inline]
+    pub fn out_packets_per_sec(&self) -> f32 {
+        self.0.m_flOutPacketsPerSec
+    }
+
+    #[inline]
+    pub fn out_bytes_per_sec(&self) -> f32 {
+        self.0.m_flOutBytesPerSec
+    }
+
+    #[inline]
+    pub fn in_packets_per_sec(&self) -> f32 {
+        self.0.m_flInPacketsPerSec
+    }
+
+    #[inline]
+    pub fn in_bytes_per_sec(&self) -> f32 {
+        self.0.m_flInBytesPerSec
+    }
+
+    #[inline]
+    pub fn send_rate_bytes_per_sec(&self) -> u32 {
+        self.0.m_nSendRateBytesPerSecond as _
+    }
+
+    #[inline]
+    pub fn pending_bytes_unreliable(&self) -> u32 {
+        self.0.m_cbPendingUnreliable as _
+    }
+
+    #[inline]
+    pub fn pending_bytes_reliable(&self) -> u32 {
+        self.0.m_cbPendingReliable as _
+    }
+
+    #[inline]
+    pub fn bytes_sent_unacked_reliable(&self) -> u32 {
+        self.0.m_cbSentUnackedReliable as _
+    }
+
+    #[inline]
+    pub fn approximated_queue_time(&self) -> u64 {
+        self.0.m_usecQueueTime as _
     }
 }
 
@@ -350,6 +474,61 @@ where
     S: GnsDroppable + IsReady,
 {
     #[inline]
+    pub fn get_connection_real_time_status(
+        &self,
+        GnsConnection(conn): GnsConnection,
+        nb_of_lanes: u32,
+    ) -> GnsResult<(
+        GnsConnectionRealTimeStatus,
+        Vec<GnsConnectionRealTimeLaneStatus>,
+    )> {
+        let mut lanes: Vec<GnsConnectionRealTimeLaneStatus> =
+            vec![Default::default(); nb_of_lanes as _];
+        unsafe {
+            let mut status: GnsConnectionRealTimeStatus = MaybeUninit::zeroed().assume_init();
+            GnsError(
+                SteamAPI_ISteamNetworkingSockets_GetConnectionRealTimeStatus(
+                    self.socket,
+                    conn,
+                    &mut status as *mut GnsConnectionRealTimeStatus
+                        as *mut SteamNetConnectionRealTimeStatus_t,
+                    nb_of_lanes as _,
+                    lanes.as_mut_ptr() as *mut GnsConnectionRealTimeLaneStatus
+                        as *mut SteamNetConnectionRealTimeLaneStatus_t,
+                ),
+            )
+            .into_result()?;
+            Ok((status, lanes))
+        }
+    }
+
+    #[inline]
+    pub fn get_connection_info(
+        &self,
+        GnsConnection(conn): GnsConnection,
+    ) -> Option<GnsConnectionInfo> {
+        unsafe {
+            let mut info: SteamNetConnectionInfo_t = MaybeUninit::zeroed().assume_init();
+            if SteamAPI_ISteamNetworkingSockets_GetConnectionInfo(self.socket, conn, &mut info) {
+                Some(GnsConnectionInfo(info))
+            } else {
+                None
+            }
+        }
+    }
+
+    #[inline]
+    pub fn flush_messages_on_connection(
+        &self,
+        GnsConnection(conn): GnsConnection,
+    ) -> GnsResult<()> {
+        GnsError(unsafe {
+            SteamAPI_ISteamNetworkingSockets_FlushMessagesOnConnection(self.socket, conn)
+        })
+        .into_result()
+    }
+
+    #[inline]
     pub fn close_connection(
         &self,
         GnsConnection(conn): GnsConnection,
@@ -374,13 +553,11 @@ where
     where
         F: FnMut(&GnsNetworkMessage<ToReceive>),
     {
-        let mut messages: [GnsNetworkMessage<ToReceive>; K] = unsafe { core::mem::zeroed() };
+        let mut messages: [GnsNetworkMessage<ToReceive>; K] =
+            unsafe { MaybeUninit::zeroed().assume_init() };
         let nb_of_messages = self.state.receive(&self, &mut messages);
         for message in messages.into_iter().take(nb_of_messages) {
             message_callback(&message);
-            unsafe {
-                SteamAPI_SteamNetworkingMessage_t_Release(message.into_inner());
-            }
         }
         nb_of_messages
     }
@@ -413,9 +590,9 @@ where
         &self,
         GnsConnection(connection): GnsConnection,
         lanes: &[GnsLane],
-    ) -> EResult {
+    ) -> GnsResult<()> {
         let (priorities, weights): (Vec<_>, Vec<_>) = lanes.iter().copied().unzip();
-        unsafe {
+        GnsError(unsafe {
             SteamAPI_ISteamNetworkingSockets_ConfigureConnectionLanes(
                 self.socket,
                 connection,
@@ -423,21 +600,34 @@ where
                 priorities.as_ptr() as *const u32 as *const i32,
                 weights.as_ptr(),
             )
-        }
+        })
+        .into_result()
     }
 
     #[inline]
-    pub fn send_messages(&self, messages: &[GnsNetworkMessage<ToSend>]) -> usize {
-        let mut nb_of_messages = 0;
+    pub fn send_messages(
+        &self,
+        messages: &[GnsNetworkMessage<ToSend>],
+    ) -> Vec<Either<GnsMessageNumber, EResult>> {
+        let mut result = vec![0i64; messages.len()];
         unsafe {
             SteamAPI_ISteamNetworkingSockets_SendMessages(
                 self.socket,
                 messages.len() as _,
                 messages.as_ptr() as *const _,
-                &mut nb_of_messages,
+                result.as_mut_ptr(),
             );
         }
-        nb_of_messages as _
+        result
+            .into_iter()
+            .map(|value| {
+                if value < 0 {
+                    Either::Right(unsafe { core::mem::transmute((-value) as u32) })
+                } else {
+                    Either::Left(value as _)
+                }
+            })
+            .collect()
     }
 }
 
@@ -559,12 +749,11 @@ impl<'x> GnsSocket<'x, IsCreated> {
 
 impl<'x> GnsSocket<'x, IsServer> {
     #[inline]
-    pub fn accept(&self, connection: GnsConnection) -> EResult {
-        let r =
-            unsafe { SteamAPI_ISteamNetworkingSockets_AcceptConnection(self.socket, connection.0) };
-        if r != EResult::k_EResultOK {
-            return r;
-        }
+    pub fn accept(&self, connection: GnsConnection) -> GnsResult<()> {
+        GnsError(unsafe {
+            SteamAPI_ISteamNetworkingSockets_AcceptConnection(self.socket, connection.0)
+        })
+        .into_result()?;
         if !unsafe {
             SteamAPI_ISteamNetworkingSockets_SetConnectionPollGroup(
                 self.socket,
@@ -572,9 +761,9 @@ impl<'x> GnsSocket<'x, IsServer> {
                 self.state.poll_group.0,
             )
         } {
-            EResult::k_EResultInvalidState
+            Err(EResult::k_EResultInvalidState)
         } else {
-            EResult::k_EResultOK
+            Ok(())
         }
     }
 }

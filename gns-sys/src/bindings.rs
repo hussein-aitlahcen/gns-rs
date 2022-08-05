@@ -5872,11 +5872,13 @@ extern "C" {
     ) -> bool;
 }
 extern "C" {
-    pub fn SteamAPI_ISteamNetworkingSockets_GetQuickConnectionStatus(
+    pub fn SteamAPI_ISteamNetworkingSockets_GetConnectionRealTimeStatus(
         self_: *mut ISteamNetworkingSockets,
         hConn: HSteamNetConnection,
         pStats: *mut SteamNetConnectionRealTimeStatus_t,
-    ) -> bool;
+        nLanes: ::std::os::raw::c_int,
+        pLanes: *mut SteamNetConnectionRealTimeLaneStatus_t,
+    ) -> EResult;
 }
 extern "C" {
     pub fn SteamAPI_ISteamNetworkingSockets_GetDetailedConnectionStatus(
