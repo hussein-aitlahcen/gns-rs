@@ -41,12 +41,16 @@ fn server(port: u16) {
 
     let mut last_update = Instant::now();
     loop {
+        // Every 10 seconds, for each clients, print some stats:
+        // IP, Ping, Outgoing bytes per sec, Incoming bytes per sec...
         let now = Instant::now();
         let elapsed = now - last_update;
         if elapsed.as_secs() > 10 {
             last_update = now;
             for (client, nick) in connected_clients.clone().into_iter() {
+                // **unwrap** must be banned in production.
                 let info = server.get_connection_info(client).unwrap();
+                // **unwrap** must be banned in production.
                 let (status, _) = server.get_connection_real_time_status(client, 0).unwrap();
                 println!(
                   "== Client {:#?}\n\tIP: {:#?}\n\tPing: {:#?}\n\tOut/sec: {:#?}\n\tIn/sec: {:#?}",
@@ -76,6 +80,7 @@ fn server(port: u16) {
                     )
                 })
                 .collect::<Vec<_>>();
+            // Here we should check whether all messages were successfully sent with the result.
             server.send_messages(&messages);
         };
 
@@ -208,6 +213,7 @@ fn client(port: u16) {
                     println!("GnsSocket<Client>: connected to server.");
                 }
                 (_, ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_ClosedByPeer | ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_ProblemDetectedLocally) => {
+                  // We got disconnected or lost the connection.
                   println!("GnsSocket<Client>: ET phone home.");
                   quit = true;
                 }
