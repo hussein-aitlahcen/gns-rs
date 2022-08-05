@@ -340,7 +340,7 @@ extern "C" {
     ) -> size_t;
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct __locale_struct {
     pub __locales: [*mut __locale_data; 13usize],
     pub __ctype_b: *const ::std::os::raw::c_ushort,
@@ -759,7 +759,7 @@ pub type __off_t = ::std::os::raw::c_long;
 pub type __off64_t = ::std::os::raw::c_long;
 pub type __pid_t = ::std::os::raw::c_int;
 #[repr(C)]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct __fsid_t {
     pub __val: [::std::os::raw::c_int; 2usize],
 }
@@ -862,7 +862,7 @@ pub type AccountID_t = uint32;
 pub type PartyBeaconID_t = uint64;
 pub const k_ulPartyBeaconIdInvalid: PartyBeaconID_t = 0;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamIPType {
     k_ESteamIPTypeIPv4 = 0,
     k_ESteamIPTypeIPv6 = 1,
@@ -993,7 +993,7 @@ impl Default for SteamIPAddress_t {
     }
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EUniverse {
     k_EUniverseInvalid = 0,
     k_EUniversePublic = 1,
@@ -1003,7 +1003,7 @@ pub enum EUniverse {
     k_EUniverseMax = 5,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EResult {
     k_EResultNone = 0,
     k_EResultOK = 1,
@@ -1133,7 +1133,7 @@ pub enum EResult {
     k_EResultCachedCredentialInvalid = 126,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EVoiceResult {
     k_EVoiceResultOK = 0,
     k_EVoiceResultNotInitialized = 1,
@@ -1147,7 +1147,7 @@ pub enum EVoiceResult {
     k_EVoiceResultReceiverDidNotAnswer = 9,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EDenyReason {
     k_EDenyInvalid = 0,
     k_EDenyInvalidVersion = 1,
@@ -1169,7 +1169,7 @@ pub enum EDenyReason {
 pub type HAuthTicket = uint32;
 pub const k_HAuthTicketInvalid: HAuthTicket = 0;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EBeginAuthSessionResult {
     k_EBeginAuthSessionResultOK = 0,
     k_EBeginAuthSessionResultInvalidTicket = 1,
@@ -1179,7 +1179,7 @@ pub enum EBeginAuthSessionResult {
     k_EBeginAuthSessionResultExpiredTicket = 5,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EAuthSessionResponse {
     k_EAuthSessionResponseOK = 0,
     k_EAuthSessionResponseUserNotConnectedToSteam = 1,
@@ -1193,14 +1193,14 @@ pub enum EAuthSessionResponse {
     k_EAuthSessionResponsePublisherIssuedBan = 9,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EUserHasLicenseForAppResult {
     k_EUserHasLicenseResultHasLicense = 0,
     k_EUserHasLicenseResultDoesNotHaveLicense = 1,
     k_EUserHasLicenseResultNoAuth = 2,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EAccountType {
     k_EAccountTypeInvalid = 0,
     k_EAccountTypeIndividual = 1,
@@ -1216,7 +1216,7 @@ pub enum EAccountType {
     k_EAccountTypeMax = 11,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EChatEntryType {
     k_EChatEntryTypeInvalid = 0,
     k_EChatEntryTypeChatMsg = 1,
@@ -1232,7 +1232,7 @@ pub enum EChatEntryType {
     k_EChatEntryTypeLinkBlocked = 14,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EChatRoomEnterResponse {
     k_EChatRoomEnterResponseSuccess = 1,
     k_EChatRoomEnterResponseDoesntExist = 2,
@@ -1251,7 +1251,7 @@ pub const k_unSteamAccountIDMask: ::std::os::raw::c_uint = 4294967295;
 pub const k_unSteamAccountInstanceMask: ::std::os::raw::c_uint = 1048575;
 pub const k_unSteamUserDefaultInstance: ::std::os::raw::c_uint = 1;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EChatSteamIDInstanceFlags {
     k_EChatAccountInstanceMask = 4095,
     k_EChatInstanceFlagClan = 524288,
@@ -1259,7 +1259,7 @@ pub enum EChatSteamIDInstanceFlags {
     k_EChatInstanceFlagMMSLobby = 131072,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ENotificationPosition {
     k_EPositionTopLeft = 0,
     k_EPositionTopRight = 1,
@@ -1267,7 +1267,7 @@ pub enum ENotificationPosition {
     k_EPositionBottomRight = 3,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EBroadcastUploadResult {
     k_EBroadcastUploadResultNone = 0,
     k_EBroadcastUploadResultOK = 1,
@@ -1295,7 +1295,7 @@ pub enum EBroadcastUploadResult {
     k_EBroadcastUploadResultAudioInitFailed = 23,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EMarketNotAllowedReasonFlags {
     k_EMarketNotAllowedReason_None = 0,
     k_EMarketNotAllowedReason_TemporaryFailure = 1,
@@ -1316,7 +1316,7 @@ pub enum EMarketNotAllowedReasonFlags {
     k_EMarketNotAllowedReason_AcceptedWalletGift = 32768,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EDurationControlProgress {
     k_EDurationControlProgress_Full = 0,
     k_EDurationControlProgress_Half = 1,
@@ -1326,7 +1326,7 @@ pub enum EDurationControlProgress {
     k_EDurationControl_ExitSoon_Night = 5,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EDurationControlNotification {
     k_EDurationControlNotification_None = 0,
     k_EDurationControlNotification_1Hour = 1,
@@ -1338,7 +1338,7 @@ pub enum EDurationControlNotification {
     k_EDurationControlNotification_ExitSoon_Night = 7,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EDurationControlOnlineState {
     k_EDurationControlOnlineState_Invalid = 0,
     k_EDurationControlOnlineState_Offline = 1,
@@ -1357,7 +1357,7 @@ pub union CSteamID_SteamID_t {
     pub m_unAll64Bits: uint64,
 }
 #[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct CSteamID_SteamID_t_SteamIDComponent_t {
     pub _bitfield_align_1: [u8; 0],
     pub _bitfield_1: __BindgenBitfieldUnit<[u8; 8usize]>,
@@ -1646,7 +1646,7 @@ pub struct CGameID {
     pub __bindgen_anon_1: CGameID__bindgen_ty_1,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum CGameID_EGameIDType {
     k_EGameIDTypeApp = 0,
     k_EGameIDTypeGameMod = 1,
@@ -1654,7 +1654,7 @@ pub enum CGameID_EGameIDType {
     k_EGameIDTypeP2P = 3,
 }
 #[repr(C, packed)]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct CGameID_GameID_t {
     pub _bitfield_align_1: [u8; 0],
     pub _bitfield_1: __BindgenBitfieldUnit<[u8; 8usize]>,
@@ -1844,7 +1844,7 @@ pub const k_cchGameExtraInfoMax: ::std::os::raw::c_int = 64;
 pub type PFNPreMinidumpCallback =
     ::std::option::Option<unsafe extern "C" fn(context: *mut ::std::os::raw::c_void)>;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EGameSearchErrorCode_t {
     k_EGameSearchErrorCode_OK = 1,
     k_EGameSearchErrorCode_Failed_Search_Already_In_Progress = 2,
@@ -1857,7 +1857,7 @@ pub enum EGameSearchErrorCode_t {
     k_EGameSearchErrorCode_Failed_Unknown_Error = 9,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum EPlayerResult_t {
     k_EPlayerResultFailedToConnect = 1,
     k_EPlayerResultAbandoned = 2,
@@ -1866,21 +1866,21 @@ pub enum EPlayerResult_t {
     k_EPlayerResultCompleted = 5,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamIPv6ConnectivityProtocol {
     k_ESteamIPv6ConnectivityProtocol_Invalid = 0,
     k_ESteamIPv6ConnectivityProtocol_HTTP = 1,
     k_ESteamIPv6ConnectivityProtocol_UDP = 2,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamIPv6ConnectivityState {
     k_ESteamIPv6ConnectivityState_Unknown = 0,
     k_ESteamIPv6ConnectivityState_Good = 1,
     k_ESteamIPv6ConnectivityState_Bad = 2,
 }
 #[repr(C, packed(4))]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, PartialOrd, PartialEq)]
 pub struct ValvePackingSentinel_t {
     pub m_u32: uint32,
     pub m_u64: uint64,
@@ -2040,7 +2040,7 @@ pub type SteamNetworkingPOPID = uint32;
 pub type SteamNetworkingMicroseconds = int64;
 #[repr(i32)]
 #[doc = " Describe the status of a particular network resource"]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamNetworkingAvailability {
     k_ESteamNetworkingAvailability_CannotTry = -102,
     k_ESteamNetworkingAvailability_Failed = -101,
@@ -2055,7 +2055,7 @@ pub enum ESteamNetworkingAvailability {
 }
 #[repr(u32)]
 #[doc = " Different methods of describing the identity of a network host"]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamNetworkingIdentityType {
     k_ESteamNetworkingIdentityType_Invalid = 0,
     k_ESteamNetworkingIdentityType_SteamID = 16,
@@ -2068,7 +2068,7 @@ pub enum ESteamNetworkingIdentityType {
 #[repr(u32)]
 #[doc = " \"Fake IPs\" are assigned to hosts, to make it easier to interface with"]
 #[doc = " older code that assumed all hosts will have an IPv4 address"]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamNetworkingFakeIPType {
     k_ESteamNetworkingFakeIPType_Invalid = 0,
     k_ESteamNetworkingFakeIPType_NotFake = 1,
@@ -2088,13 +2088,13 @@ pub struct SteamNetworkingIPAddr {
 pub const SteamNetworkingIPAddr_k_cchMaxString: SteamNetworkingIPAddr__bindgen_ty_1 =
     SteamNetworkingIPAddr__bindgen_ty_1::k_cchMaxString;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum SteamNetworkingIPAddr__bindgen_ty_1 {
     k_cchMaxString = 48,
 }
 #[doc = " RFC4038, section 4.2"]
 #[repr(C, packed)]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SteamNetworkingIPAddr_IPv4MappedAddress {
     pub m_8zeros: uint64,
     pub m_0000: uint16,
@@ -2404,7 +2404,7 @@ pub const SteamNetworkingIdentity_k_cchMaxGenericString: SteamNetworkingIdentity
 pub const SteamNetworkingIdentity_k_cbMaxGenericBytes: SteamNetworkingIdentity__bindgen_ty_1 =
     SteamNetworkingIdentity__bindgen_ty_1::k_cchMaxGenericString;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum SteamNetworkingIdentity__bindgen_ty_1 {
     k_cchMaxString = 128,
     k_cchMaxGenericString = 32,
@@ -2818,7 +2818,7 @@ impl SteamNetworkingIdentity {
 }
 #[repr(i32)]
 #[doc = " High level connection status"]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamNetworkingConnectionState {
     #[doc = " Dummy value used to indicate an error condition in the API."]
     #[doc = " Specified connection doesn't exist or has already been closed."]
@@ -2918,7 +2918,7 @@ impl ESteamNetConnectionEnd {
 #[doc = " Enumerate various causes of connection termination.  These are designed to work similar"]
 #[doc = " to HTTP error codes: the numeric range gives you a rough classification as to the source"]
 #[doc = " of the problem."]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamNetConnectionEnd {
     k_ESteamNetConnectionEnd_Invalid = 0,
     k_ESteamNetConnectionEnd_App_Min = 1000,
@@ -3251,7 +3251,7 @@ impl Default for SteamNetConnectionInfo_t {
 #[doc = " Quick connection state, pared down to something you could call"]
 #[doc = " more frequently without it being too big of a perf hit."]
 #[repr(C, packed(4))]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct SteamNetConnectionRealTimeStatus_t {
     #[doc = " High level state of the connection"]
     pub m_eState: ESteamNetworkingConnectionState,
@@ -3594,7 +3594,7 @@ impl Default for SteamNetConnectionRealTimeStatus_t {
 }
 #[doc = " Quick status of a particular lane"]
 #[repr(C, packed(4))]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SteamNetConnectionRealTimeLaneStatus_t {
     pub m_cbPendingUnreliable: ::std::os::raw::c_int,
     pub m_cbPendingReliable: ::std::os::raw::c_int,
@@ -4091,7 +4091,7 @@ pub const k_nSteamNetworkingSend_AutoRestartBrokenSession: ::std::os::raw::c_int
 #[doc = " to do that, convert it to a string representation using the methods in"]
 #[doc = " ISteamNetworkingUtils()."]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SteamNetworkPingLocation_t {
     pub m_data: [uint8; 512usize],
 }
@@ -4145,7 +4145,7 @@ pub const k_nSteamNetworkingPing_Failed: ::std::os::raw::c_int = -1;
 pub const k_nSteamNetworkingPing_Unknown: ::std::os::raw::c_int = -2;
 #[repr(u32)]
 #[doc = " Configuration values can be applied to different types of objects."]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamNetworkingConfigScope {
     #[doc = " Get/set global option, or defaults.  Even options that apply to more specific scopes"]
     #[doc = " have global scope, and you may be able to just change the global defaults.  If you"]
@@ -4168,7 +4168,7 @@ pub enum ESteamNetworkingConfigScope {
     k_ESteamNetworkingConfigScope__Force32Bit = 2147483647,
 }
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamNetworkingConfigDataType {
     k_ESteamNetworkingConfig_Int32 = 1,
     k_ESteamNetworkingConfig_Int64 = 2,
@@ -4179,7 +4179,7 @@ pub enum ESteamNetworkingConfigDataType {
 }
 #[repr(u32)]
 #[doc = " Configuration options"]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamNetworkingConfigValue {
     k_ESteamNetworkingConfig_Invalid = 0,
     #[doc = " [connection int32] Timeout value (in ms) to use when first connecting"]
@@ -4808,7 +4808,7 @@ impl Default for SteamNetworkingConfigValue_t {
 }
 #[repr(i32)]
 #[doc = " Return value of ISteamNetworkintgUtils::GetConfigValue"]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamNetworkingGetConfigValueResult {
     k_ESteamNetworkingGetConfigValue_BadValue = -1,
     k_ESteamNetworkingGetConfigValue_BadScopeObj = -2,
@@ -4820,7 +4820,7 @@ pub enum ESteamNetworkingGetConfigValueResult {
 #[repr(u32)]
 #[doc = " Detail level for diagnostic output callback."]
 #[doc = " See ISteamNetworkingUtils::SetDebugOutputFunction"]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ESteamNetworkingSocketsDebugOutputType {
     k_ESteamNetworkingSocketsDebugOutputType_None = 0,
     k_ESteamNetworkingSocketsDebugOutputType_Bug = 1,
@@ -4844,7 +4844,7 @@ pub type FSteamNetworkingSocketsDebugOutput = ::std::option::Option<
 pub const k_SteamDatagramPOPID_dev: SteamNetworkingPOPID = 6579574;
 #[doc = " Utility class for printing a SteamNetworkingPOPID."]
 #[repr(C)]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SteamNetworkingPOPIDRender {
     pub buf: [::std::os::raw::c_char; 8usize],
 }
@@ -4884,21 +4884,21 @@ pub type SteamDatagramErrMsg = SteamNetworkingErrMsg;
 pub const k_iSteamNetworkingSocketsCallbacks: _bindgen_ty_1 =
     _bindgen_ty_1::k_iSteamNetworkingSocketsCallbacks;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum _bindgen_ty_1 {
     k_iSteamNetworkingSocketsCallbacks = 1220,
 }
 pub const k_iSteamNetworkingMessagesCallbacks: _bindgen_ty_2 =
     _bindgen_ty_2::k_iSteamNetworkingMessagesCallbacks;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum _bindgen_ty_2 {
     k_iSteamNetworkingMessagesCallbacks = 1250,
 }
 pub const k_iSteamNetworkingUtilsCallbacks: _bindgen_ty_3 =
     _bindgen_ty_3::k_iSteamNetworkingUtilsCallbacks;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum _bindgen_ty_3 {
     k_iSteamNetworkingUtilsCallbacks = 1280,
 }
@@ -4947,7 +4947,7 @@ pub struct ISteamNetworkingSockets__bindgen_vtable(::std::os::raw::c_void);
 #[doc = " See also: ISteamNetworkingMessages, the UDP-style interface.  This API might be"]
 #[doc = " easier to use, especially when porting existing UDP code."]
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct ISteamNetworkingSockets {
     pub vtable_: *const ISteamNetworkingSockets__bindgen_vtable,
 }
@@ -5040,7 +5040,7 @@ pub const SteamNetConnectionStatusChangedCallback_t_k_iCallback:
     SteamNetConnectionStatusChangedCallback_t__bindgen_ty_1 =
     SteamNetConnectionStatusChangedCallback_t__bindgen_ty_1::k_iCallback;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum SteamNetConnectionStatusChangedCallback_t__bindgen_ty_1 {
     k_iCallback = 1221,
 }
@@ -5135,7 +5135,7 @@ impl Default for SteamNetConnectionStatusChangedCallback_t {
 #[doc = ""]
 #[doc = " This callback is posted whenever the state of our readiness changes."]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SteamNetAuthenticationStatus_t {
     #[doc = " Status"]
     pub m_eAvail: ESteamNetworkingAvailability,
@@ -5146,7 +5146,7 @@ pub struct SteamNetAuthenticationStatus_t {
 pub const SteamNetAuthenticationStatus_t_k_iCallback: SteamNetAuthenticationStatus_t__bindgen_ty_1 =
     SteamNetAuthenticationStatus_t__bindgen_ty_1::k_iCallback;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum SteamNetAuthenticationStatus_t__bindgen_ty_1 {
     k_iCallback = 1222,
 }
@@ -5211,7 +5211,7 @@ pub struct ISteamNetworkingUtils__bindgen_vtable(::std::os::raw::c_void);
 #[doc = " Misc networking utilities for checking the local networking environment"]
 #[doc = " and estimating pings."]
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct ISteamNetworkingUtils {
     pub vtable_: *const ISteamNetworkingUtils__bindgen_vtable,
 }
@@ -5480,7 +5480,7 @@ extern "C" {
 #[doc = " To do this we first need to fetch the network configuration,"]
 #[doc = " which describes what POPs are available."]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SteamRelayNetworkStatus_t {
     #[doc = " Summary status.  When this is \"current\", initialization has"]
     #[doc = " completed.  Anything else means you are not ready yet, or"]
@@ -5508,7 +5508,7 @@ pub struct SteamRelayNetworkStatus_t {
 pub const SteamRelayNetworkStatus_t_k_iCallback: SteamRelayNetworkStatus_t__bindgen_ty_1 =
     SteamRelayNetworkStatus_t__bindgen_ty_1::k_iCallback;
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub enum SteamRelayNetworkStatus_t__bindgen_ty_1 {
     k_iCallback = 1281,
 }
@@ -5622,7 +5622,7 @@ impl Default for SteamRelayNetworkStatus_t {
 #[doc = " Utility class for printing a SteamNetworkingIdentity."]
 #[doc = " E.g. printf( \"Identity is '%s'\\n\", SteamNetworkingIdentityRender( identity ).c_str() );"]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SteamNetworkingIdentityRender {
     pub buf: [::std::os::raw::c_char; 128usize],
 }
@@ -5667,7 +5667,7 @@ impl Default for SteamNetworkingIdentityRender {
 }
 #[doc = " Utility class for printing a SteamNetworkingIPAddrRender."]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SteamNetworkingIPAddrRender {
     pub buf: [::std::os::raw::c_char; 48usize],
 }
@@ -6508,7 +6508,7 @@ extern "C" {
     );
 }
 #[repr(C)]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct __locale_data {
     pub _address: u8,
 }

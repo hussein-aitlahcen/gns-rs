@@ -19,6 +19,11 @@ fn main() {
         .derive_debug(true)
         .derive_default(true)
         .derive_copy(true)
+        .derive_partialord(true)
+        .derive_ord(true)
+        .derive_partialeq(true)
+        .derive_eq(true)
+        .derive_hash(true)
         .default_enum_style(bindgen::EnumVariation::Rust {
             non_exhaustive: false,
         })
@@ -89,7 +94,6 @@ fn main() {
 
         ])
         .compiler("clang++")
-        .warnings(false)
         .flag("-std=c++11")
         .flag("-fvisibility=hidden")
         .flag("-fno-strict-aliasing")
