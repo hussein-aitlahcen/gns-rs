@@ -761,10 +761,9 @@ impl<'x> GnsSocket<'x, IsServer> {
                 self.state.poll_group.0,
             )
         } {
-            Err(EResult::k_EResultInvalidState)
-        } else {
-            Ok(())
+            panic!("It's impossible not to be able to set the connection poll group as both the poll group and the connection must be valid at this point.");
         }
+        Ok(())
     }
 }
 
