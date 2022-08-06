@@ -82,7 +82,7 @@ fn server(port: u16) {
                 })
                 .collect::<Vec<_>>();
             // Here we should check whether all messages were successfully sent with the result.
-            server.send_messages(&messages);
+            server.send_messages(messages);
         };
 
         // Process connections events.
@@ -235,7 +235,7 @@ fn client(port: u16) {
             if input == "quit" {
                 break 'a;
             }
-            client.send_messages(&[client.utils().allocate_message(
+            client.send_messages(vec![client.utils().allocate_message(
                 client.connection(),
                 k_nSteamNetworkingSend_Reliable,
                 input.as_bytes(),
