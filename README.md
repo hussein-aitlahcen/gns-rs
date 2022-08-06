@@ -7,8 +7,8 @@ The library does not require your application to be running with Steam and this 
 Some features might be missing, if you are interested to introduce more abstraction, feel free to open a PR/Issue.
 
 Libraries:
-- `gns-sys` is C++ library from Valve compiled with bindings generated.
-- `gns` is the high level Rust wrapper.
+- `gns-sys` is the C++ library from Valve compiled with bindings generated (the library is directly compiled by cargo so you don't need to have it already installed).
+- `gns` is the high level, type-safe Rust wrapper.
 
 Even if `gns` is a high level abstraction, it re-export most of the low level functions/structures/constants.
 
