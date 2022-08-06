@@ -8,6 +8,7 @@ use std::{
     net::Ipv6Addr,
     pin::Pin,
     sync::atomic::AtomicBool,
+    time::Duration,
 };
 
 pub type GnsMessageNumber = u64;
@@ -346,6 +347,28 @@ impl GnsConnectionInfo {
 #[derive(Debug, Default, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct GnsConnectionRealTimeLaneStatus(SteamNetConnectionRealTimeLaneStatus_t);
 
+impl GnsConnectionRealTimeLaneStatus {
+    #[inline]
+    pub fn pending_bytes_unreliable(&self) -> u32 {
+        self.0.m_cbPendingUnreliable as _
+    }
+
+    #[inline]
+    pub fn pending_bytes_reliable(&self) -> u32 {
+        self.0.m_cbPendingReliable as _
+    }
+
+    #[inline]
+    pub fn bytes_sent_unacked_reliable(&self) -> u32 {
+        self.0.m_cbSentUnackedReliable as _
+    }
+
+    #[inline]
+    pub fn approximated_queue_time(&self) -> Duration {
+        Duration::from_micros(self.0.m_usecQueueTime as _)
+    }
+}
+
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct GnsConnectionRealTimeStatus(SteamNetConnectionRealTimeStatus_t);
@@ -412,8 +435,8 @@ impl GnsConnectionRealTimeStatus {
     }
 
     #[inline]
-    pub fn approximated_queue_time(&self) -> u64 {
-        self.0.m_usecQueueTime as _
+    pub fn approximated_queue_time(&self) -> Duration {
+        Duration::from_micros(self.0.m_usecQueueTime as _)
     }
 }
 
