@@ -461,14 +461,14 @@ impl GnsConnectionEvent {
     }
 }
 
-pub struct GnsSocket<'x, S: GnsDroppable> {
+pub struct GnsSocket<'x, 'y, S: GnsDroppable> {
     global: &'x GnsGlobal,
-    utils: GnsUtils,
+    utils: &'y GnsUtils,
     socket: *mut ISteamNetworkingSockets,
     state: S,
 }
 
-impl<'x, S> Drop for GnsSocket<'x, S>
+impl<'x, 'y, S> Drop for GnsSocket<'x, 'y, S>
 where
     S: GnsDroppable,
 {
@@ -477,7 +477,7 @@ where
     }
 }
 
-impl<'x, S> GnsSocket<'x, S>
+impl<'x, 'y, S> GnsSocket<'x, 'y, S>
 where
     S: GnsDroppable,
 {
@@ -492,7 +492,7 @@ where
     }
 }
 
-impl<'x, S> GnsSocket<'x, S>
+impl<'x, 'y, S> GnsSocket<'x, 'y, S>
 where
     S: GnsDroppable + IsReady,
 {
@@ -653,7 +653,7 @@ where
     }
 }
 
-impl<'x> GnsSocket<'x, IsCreated> {
+impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
     unsafe extern "C" fn on_connection_state_changed(
         info: &SteamNetConnectionStatusChangedCallback_t,
     ) {
@@ -663,8 +663,7 @@ impl<'x> GnsSocket<'x, IsCreated> {
     }
 
     #[inline]
-    pub fn new(global: &'x GnsGlobal) -> Option<Self> {
-        let utils = GnsUtils::new()?;
+    pub fn new(global: &'x GnsGlobal, utils: &'y GnsUtils) -> Option<Self> {
         let ptr = unsafe { SteamAPI_SteamNetworkingSockets_v009() };
         if ptr.is_null() {
             None
@@ -708,7 +707,7 @@ impl<'x> GnsSocket<'x, IsCreated> {
     }
 
     #[inline]
-    pub fn listen(self, address: Ipv6Addr, port: u16) -> Result<GnsSocket<'x, IsServer>, ()> {
+    pub fn listen(self, address: Ipv6Addr, port: u16) -> Result<GnsSocket<'x, 'y, IsServer>, ()> {
         let queue = Box::pin(SegQueue::new());
         let (addr, options) = Self::setup_common(address, port, &queue);
         let listen_socket = unsafe {
@@ -742,7 +741,7 @@ impl<'x> GnsSocket<'x, IsCreated> {
     }
 
     #[inline]
-    pub fn connect(self, address: Ipv6Addr, port: u16) -> Result<GnsSocket<'x, IsClient>, ()> {
+    pub fn connect(self, address: Ipv6Addr, port: u16) -> Result<GnsSocket<'x, 'y, IsClient>, ()> {
         let queue = Box::pin(SegQueue::new());
         let (addr, options) = Self::setup_common(address, port, &queue);
         let connection = unsafe {
@@ -769,7 +768,7 @@ impl<'x> GnsSocket<'x, IsCreated> {
     }
 }
 
-impl<'x> GnsSocket<'x, IsServer> {
+impl<'x, 'y> GnsSocket<'x, 'y, IsServer> {
     #[inline]
     pub fn accept(&self, connection: GnsConnection) -> GnsResult<()> {
         GnsError(unsafe {
@@ -789,7 +788,7 @@ impl<'x> GnsSocket<'x, IsServer> {
     }
 }
 
-impl<'x> GnsSocket<'x, IsClient> {
+impl<'x, 'y> GnsSocket<'x, 'y, IsClient> {
     #[inline]
     pub fn connection(&self) -> GnsConnection {
         self.state.connection
@@ -797,12 +796,18 @@ impl<'x> GnsSocket<'x, IsClient> {
 }
 
 #[repr(transparent)]
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct GnsUtils(*mut ISteamNetworkingUtils);
+
+impl Drop for GnsUtils {
+    fn drop(&mut self) {
+        unsafe { ISteamNetworkingUtils_ISteamNetworkingUtils_destructor(self.0) }
+    }
+}
 
 impl GnsUtils {
     #[inline]
-    fn new() -> Option<Self> {
+    pub fn new() -> Option<Self> {
         let ptr = unsafe { SteamAPI_SteamNetworkingUtils_v003() };
         if ptr.is_null() {
             None
