@@ -2,6 +2,12 @@
 name = "gns-sys"
 version = "0.1.0"
 edition = "2021"
+description = "Rust bindings for Valve GameNetworkingSockets library."
+license = "MIT / Apache-2.0"
+repository = "https://github.com/hussein-aitlahcen/gns-rs"
+authors = [ "Hussein Ait-Lahcen <hussein@gmail.com> <https://github.com/hussein-aitlahcen>" ]
+keywords = ["gamedev", "networking", "udp"]
+categories = ["games"]
 
 [lib]
 crate-type = ["rlib", "staticlib"]
