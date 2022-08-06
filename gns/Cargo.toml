@@ -2,6 +2,11 @@
 name = "gns"
 version = "0.1.0"
 edition = "2021"
+description = "Rust abstraction for Valve GameNetworkingSockets library."
+license = "MIT / Apache-2.0"
+authors = [ "Hussein Ait-Lahcen <hussein@gmail.com> <https://github.com/hussein-aitlahcen>" ]
+keywords = ["gamedev", "networking", "udp"]
+categories = ["games"]
 
 [dependencies]
 gns-sys = { path = "../gns-sys" }
