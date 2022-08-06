@@ -3,7 +3,7 @@ on:
   push:
 jobs:
   build-linux:
-    name: Build Linux
+    name: Linux
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
@@ -16,7 +16,7 @@ jobs:
           RUST_LOG=debug cargo build -p gns -vvv
 
   build-windows:
-    name: Build Windows
+    name: Windows
     runs-on: windows-latest
     steps:
       - name: Setup | Checkout
@@ -28,7 +28,5 @@ jobs:
           choco install openssl
           choco install protoc
           git clone --depth 1 --branch v3.20.1 https://github.com/protocolbuffers/protobuf
-          echo $Env:CPLUS_INCLUDE_PATH
           $Env:CPLUS_INCLUDE_PATH = "C:\Program Files\OpenSSL-Win64\include\;$((Get-Location).Path)\protobuf\src"
-          echo $Env:CPLUS_INCLUDE_PATH
           cargo build -p gns -vvv
