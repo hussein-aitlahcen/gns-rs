@@ -126,13 +126,11 @@ pub const __GLIBC_USE_DEPRECATED_GETS: u32 = 1;
 pub const __GLIBC_USE_DEPRECATED_SCANF: u32 = 0;
 pub const _STDC_PREDEF_H: u32 = 1;
 pub const __STDC_IEC_559__: u32 = 1;
-pub const __STDC_IEC_60559_BFP__: u32 = 201404;
 pub const __STDC_IEC_559_COMPLEX__: u32 = 1;
-pub const __STDC_IEC_60559_COMPLEX__: u32 = 201404;
 pub const __STDC_ISO_10646__: u32 = 201706;
 pub const __GNU_LIBRARY__: u32 = 6;
 pub const __GLIBC__: u32 = 2;
-pub const __GLIBC_MINOR__: u32 = 35;
+pub const __GLIBC_MINOR__: u32 = 34;
 pub const _SYS_CDEFS_H: u32 = 1;
 pub const __glibc_c99_flexarr_available: u32 = 1;
 pub const __LDOUBLE_REDIRECTS_TO_FLOAT128_ABI: u32 = 0;
@@ -264,13 +262,6 @@ extern "C" {
 }
 extern "C" {
     pub fn memcmp(
-        __s1: *const ::std::os::raw::c_void,
-        __s2: *const ::std::os::raw::c_void,
-        __n: size_t,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn __memcmpeq(
         __s1: *const ::std::os::raw::c_void,
         __s2: *const ::std::os::raw::c_void,
         __n: size_t,
@@ -3679,12 +3670,6 @@ extern "C" {
     ) -> bool;
 }
 extern "C" {
-    pub fn SteamAPI_ISteamNetworkingSockets_GetIdentity(
-        self_: *mut ISteamNetworkingSockets,
-        pIdentity: *mut SteamNetworkingIdentity,
-    ) -> bool;
-}
-extern "C" {
     pub fn SteamAPI_ISteamNetworkingSockets_ConfigureConnectionLanes(
         self_: *mut ISteamNetworkingSockets,
         hConn: HSteamNetConnection,
@@ -3692,6 +3677,12 @@ extern "C" {
         pLanePriorities: *const ::std::os::raw::c_int,
         pLaneWeights: *const uint16,
     ) -> EResult;
+}
+extern "C" {
+    pub fn SteamAPI_ISteamNetworkingSockets_GetIdentity(
+        self_: *mut ISteamNetworkingSockets,
+        pIdentity: *mut SteamNetworkingIdentity,
+    ) -> bool;
 }
 extern "C" {
     pub fn SteamAPI_ISteamNetworkingSockets_InitAuthentication(

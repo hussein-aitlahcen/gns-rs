@@ -10,12 +10,8 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    crane = {
-      url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
-  outputs = { self, nixpkgs, crane, flake-utils, rust-overlay }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
@@ -29,6 +25,7 @@
       in rec {
         devShell = mkShell {
           buildInputs = [ rust-nightly clang protobuf openssl pkg-config  ];
+          PROTOC = "${protobuf}/bin/protoc";
           LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
           LD_LIBRARY_PATH =
             lib.makeLibraryPath [ clangStdenv.cc.cc.lib openssl protobuf ];

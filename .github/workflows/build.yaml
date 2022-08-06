@@ -1,0 +1,34 @@
+name: "Build"
+on:
+  push:
+jobs:
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+      - name: Test
+        run: |
+          sudo apt-get install autoconf pkg-config libprotobuf-c-dev protobuf-compiler libssl-dev
+          RUST_LOG=debug cargo build -p gns -vvv
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+      - name: Test
+        run: |
+          choco install openssl
+          choco install protoc
+          git clone --depth 1 --branch v3.20.1 https://github.com/protocolbuffers/protobuf
+          echo $Env:CPLUS_INCLUDE_PATH
+          $Env:CPLUS_INCLUDE_PATH = "C:\Program Files\OpenSSL-Win64\include\;$((Get-Location).Path)\protobuf\src"
+          echo $Env:CPLUS_INCLUDE_PATH
+          cargo build -p gns -vvv

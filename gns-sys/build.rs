@@ -46,8 +46,17 @@ fn main() {
     ]).current_dir(&Path::new("./"))
     .status().unwrap();
 
-    cc::Build::new()
-        .cpp(true)
+    let mut cc = cc::Build::new();
+
+    if cfg!(target_os = "linux") {
+        cc.define("linux", None);
+    } else if cfg!(target_os = "windows") {
+        cc.define("_WIN32", None);
+        cc.define("_WINDOWS", None);
+    }
+
+    cc.cpp(true)
+        .define("STEAMNETWORKINGSOCKETS_STATIC_LINK", None)
         .define("STEAMNETWORKINGSOCKETS_CRYPTO_VALVEOPENSSL", None)
         .define("VALVE_CRYPTO_25519_OPENSSL", None)
         .define("VALVE_CRYPTO_ENABLE_25519", None)
@@ -94,7 +103,7 @@ fn main() {
 
         ])
         .compiler("clang++")
-        .flag("-std=c++11")
+        .flag("-std=c++14")
         .flag("-fvisibility=hidden")
         .flag("-fno-strict-aliasing")
         .flag("-Wall")
