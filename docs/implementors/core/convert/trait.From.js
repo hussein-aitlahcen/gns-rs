@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["gns"] = [{"text":"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/convert/trait.From.html\" title=\"trait core::convert::From\">From</a>&lt;<a class=\"struct\" href=\"gns/struct.GnsError.html\" title=\"struct gns::GnsError\">GnsError</a>&gt; for <a class=\"type\" href=\"gns/type.GnsResult.html\" title=\"type gns::GnsResult\">GnsResult</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/nightly/std/primitive.unit.html\">()</a>&gt;","synthetic":false,"types":["gns::GnsResult"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
