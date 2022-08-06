@@ -7,6 +7,7 @@ fn main() {
     println!("cargo:rustc-link-lib=protobuf");
     println!("cargo:rustc-link-lib=crypto");
     println!("cargo:rustc-link-lib=ssl");
+
     let bindings = bindgen::Builder::default()
         .clang_arg("-Ithirdparty/GameNetworkingSockets/include/")
         .clang_arg("-Ithirdparty/GameNetworkingSockets/src/public/")
