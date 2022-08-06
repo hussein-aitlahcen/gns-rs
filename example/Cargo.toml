@@ -7,4 +7,5 @@ license = "MIT / Apache-2.0"
 authors = [ "Hussein Ait-Lahcen <hussein@gmail.com> <https://github.com/hussein-aitlahcen>" ]
 
 [dependencies]
+gns-sys = { path = "../gns-sys" }
 gns = { path = "../gns" }
