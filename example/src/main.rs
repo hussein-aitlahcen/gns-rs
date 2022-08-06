@@ -1,5 +1,3 @@
-extern crate alloc;
-
 use gns::*;
 use std::{
     collections::HashMap,

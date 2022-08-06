@@ -1,5 +1,3 @@
-extern crate bindgen;
-
 use std::{
     path::{Path, PathBuf},
     process::Command,
@@ -8,6 +6,7 @@ use std::{
 fn main() {
     println!("cargo:rustc-link-lib=protobuf");
     println!("cargo:rustc-link-lib=crypto");
+    println!("cargo:rustc-link-lib=ssl");
     let bindings = bindgen::Builder::default()
         .clang_arg("-Ithirdparty/GameNetworkingSockets/include/")
         .clang_arg("-Ithirdparty/GameNetworkingSockets/src/public/")
@@ -24,6 +23,7 @@ fn main() {
         .derive_partialeq(true)
         .derive_eq(true)
         .derive_hash(true)
+        .layout_tests(false)
         .default_enum_style(bindgen::EnumVariation::Rust {
             non_exhaustive: false,
         })
