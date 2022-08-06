@@ -313,11 +313,10 @@ impl GnsNetworkMessage<ToSend> {
 }
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GnsConnection(HSteamNetConnection);
 
-#[repr(transparent)]
-#[derive(Copy, Clone)]
+#[derive(Default, Copy, Clone)]
 pub struct GnsConnectionInfo(SteamNetConnectionInfo_t);
 
 impl GnsConnectionInfo {
@@ -343,7 +342,6 @@ impl GnsConnectionInfo {
     }
 }
 
-#[repr(transparent)]
 #[derive(Debug, Default, Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct GnsConnectionRealTimeLaneStatus(SteamNetConnectionRealTimeLaneStatus_t);
 
@@ -369,7 +367,6 @@ impl GnsConnectionRealTimeLaneStatus {
     }
 }
 
-#[repr(transparent)]
 #[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct GnsConnectionRealTimeStatus(SteamNetConnectionRealTimeStatus_t);
 
@@ -440,8 +437,7 @@ impl GnsConnectionRealTimeStatus {
     }
 }
 
-#[repr(transparent)]
-#[derive(Copy, Clone)]
+#[derive(Default, Copy, Clone)]
 pub struct GnsConnectionEvent(SteamNetConnectionStatusChangedCallback_t);
 
 impl GnsConnectionEvent {
@@ -795,8 +791,6 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsClient> {
     }
 }
 
-#[repr(transparent)]
-#[derive(Clone)]
 pub struct GnsUtils(*mut ISteamNetworkingUtils);
 
 impl Drop for GnsUtils {
