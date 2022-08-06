@@ -370,7 +370,7 @@ impl GnsConnectionRealTimeLaneStatus {
 }
 
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct GnsConnectionRealTimeStatus(SteamNetConnectionRealTimeStatus_t);
 
 impl GnsConnectionRealTimeStatus {
@@ -507,22 +507,20 @@ where
     )> {
         let mut lanes: Vec<GnsConnectionRealTimeLaneStatus> =
             vec![Default::default(); nb_of_lanes as _];
-        unsafe {
-            let mut status: GnsConnectionRealTimeStatus = MaybeUninit::zeroed().assume_init();
-            GnsError(
-                SteamAPI_ISteamNetworkingSockets_GetConnectionRealTimeStatus(
-                    self.socket,
-                    conn,
-                    &mut status as *mut GnsConnectionRealTimeStatus
-                        as *mut SteamNetConnectionRealTimeStatus_t,
-                    nb_of_lanes as _,
-                    lanes.as_mut_ptr() as *mut GnsConnectionRealTimeLaneStatus
-                        as *mut SteamNetConnectionRealTimeLaneStatus_t,
-                ),
+        let mut status: GnsConnectionRealTimeStatus = Default::default();
+        GnsError(unsafe {
+            SteamAPI_ISteamNetworkingSockets_GetConnectionRealTimeStatus(
+                self.socket,
+                conn,
+                &mut status as *mut GnsConnectionRealTimeStatus
+                    as *mut SteamNetConnectionRealTimeStatus_t,
+                nb_of_lanes as _,
+                lanes.as_mut_ptr() as *mut GnsConnectionRealTimeLaneStatus
+                    as *mut SteamNetConnectionRealTimeLaneStatus_t,
             )
-            .into_result()?;
-            Ok((status, lanes))
-        }
+        })
+        .into_result()?;
+        Ok((status, lanes))
     }
 
     #[inline]
@@ -530,13 +528,13 @@ where
         &self,
         GnsConnection(conn): GnsConnection,
     ) -> Option<GnsConnectionInfo> {
-        unsafe {
-            let mut info: SteamNetConnectionInfo_t = MaybeUninit::zeroed().assume_init();
-            if SteamAPI_ISteamNetworkingSockets_GetConnectionInfo(self.socket, conn, &mut info) {
-                Some(GnsConnectionInfo(info))
-            } else {
-                None
-            }
+        let mut info: SteamNetConnectionInfo_t = Default::default();
+        if unsafe {
+            SteamAPI_ISteamNetworkingSockets_GetConnectionInfo(self.socket, conn, &mut info)
+        } {
+            Some(GnsConnectionInfo(info))
+        } else {
+            None
         }
     }
 
@@ -576,6 +574,7 @@ where
     where
         F: FnMut(&GnsNetworkMessage<ToReceive>),
     {
+        // Do not implements default for networking messages as they must be allocated by the lib.
         let mut messages: [GnsNetworkMessage<ToReceive>; K] =
             unsafe { MaybeUninit::zeroed().assume_init() };
         let nb_of_messages = self.state.receive(&self, &mut messages);
