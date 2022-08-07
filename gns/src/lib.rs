@@ -14,7 +14,7 @@
 //! let gns_global = GnsGlobal::get().unwrap();
 //! let gns_utils = GnsUtils::new().unwrap();
 //!
-//! // Create a new socket, the index type [`IsCreated`] is used to determine the state of the socket.
+//! // Create a new [`GnsSocket`], the index type [`IsCreated`] is used to determine the state of the socket.
 //! // The [`GnsSocket::new`] function is only available for the [`IsCreated`] state. This is the initial state of the socket.
 //! let gns_socket = GnsSocket::<IsCreated>::new().unwrap();
 //!

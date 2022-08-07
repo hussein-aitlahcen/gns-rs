@@ -902,9 +902,114 @@
 <span id="902">902</span>
 <span id="903">903</span>
 <span id="904">904</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">crossbeam_queue::SegQueue</span>;
+<span id="905">905</span>
+<span id="906">906</span>
+<span id="907">907</span>
+<span id="908">908</span>
+<span id="909">909</span>
+<span id="910">910</span>
+<span id="911">911</span>
+<span id="912">912</span>
+<span id="913">913</span>
+<span id="914">914</span>
+<span id="915">915</span>
+<span id="916">916</span>
+<span id="917">917</span>
+<span id="918">918</span>
+<span id="919">919</span>
+<span id="920">920</span>
+<span id="921">921</span>
+<span id="922">922</span>
+<span id="923">923</span>
+<span id="924">924</span>
+<span id="925">925</span>
+<span id="926">926</span>
+<span id="927">927</span>
+<span id="928">928</span>
+<span id="929">929</span>
+<span id="930">930</span>
+<span id="931">931</span>
+<span id="932">932</span>
+<span id="933">933</span>
+<span id="934">934</span>
+<span id="935">935</span>
+<span id="936">936</span>
+<span id="937">937</span>
+<span id="938">938</span>
+<span id="939">939</span>
+<span id="940">940</span>
+<span id="941">941</span>
+<span id="942">942</span>
+<span id="943">943</span>
+<span id="944">944</span>
+<span id="945">945</span>
+<span id="946">946</span>
+<span id="947">947</span>
+<span id="948">948</span>
+<span id="949">949</span>
+<span id="950">950</span>
+<span id="951">951</span>
+<span id="952">952</span>
+<span id="953">953</span>
+<span id="954">954</span>
+<span id="955">955</span>
+<span id="956">956</span>
+<span id="957">957</span>
+<span id="958">958</span>
+</pre><pre class="rust"><code><span class="doccomment">//! # Rust wrapper for Valve GameNetworkingSockets.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Provides an abstraction over the low-level library.</span>
+<span class="doccomment">//! There are multiple advantage to use this abstraction:</span>
+<span class="doccomment">//! - Type safety: most of the low-level structures are wrapped and we leverage the type system to restrict the operations such that they are all **safe**.</span>
+<span class="doccomment">//! - High level: the library abstract most of the structure in such a way that you don&#39;t have to deal with the low-level FFI plumbering required. The API is idiomatic, pure Rust.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! # Example</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//! // **uwrap** must be banned in production, we use it here to extract the most relevant part of the library.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! // Initial the global networking state. Note that this instance must be unique per-process.</span>
+<span class="doccomment">//! let gns_global = GnsGlobal::get().unwrap();</span>
+<span class="doccomment">//! let gns_utils = GnsUtils::new().unwrap();</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! // Create a new [`GnsSocket`], the index type [`IsCreated`] is used to determine the state of the socket.</span>
+<span class="doccomment">//! // The [`GnsSocket::new`] function is only available for the [`IsCreated`] state. This is the initial state of the socket.</span>
+<span class="doccomment">//! let gns_socket = GnsSocket::&lt;IsCreated&gt;::new().unwrap();</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! // We now do a transition from [`IsCreated`] to the [`IsClient`] state. The [`GnsSocket::connect`] operation does this transition for us.</span>
+<span class="doccomment">//! // Since we are now using a client socket, we have access to a different set of operations.</span>
+<span class="doccomment">//! let client = gns_socket.connect(Ipv6Addr::LOCALHOST, port).unwrap();</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! // Now that we initiated a connection, there is three operation we must loop over:</span>
+<span class="doccomment">//! // - polling for new messages</span>
+<span class="doccomment">//! // - polling for connection status change</span>
+<span class="doccomment">//! // - polling for callbacks (low-level callbacks required by the underlying library).</span>
+<span class="doccomment">//! // Important to know, regardless of the type of socket, whether it is in [`IsClient`] or [`IsServer`] state, theses three operations are the same.</span>
+<span class="doccomment">//! // The only difference is that polling for messages and status on the client only act on the client connection, while polling for messages and status on a server yield event for all connected clients.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! loop {</span>
+<span class="doccomment">//!   // Run the low-level callbacks.</span>
+<span class="doccomment">//!   client.poll_callbacks();</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!   // Receive a maximum of 100 messages on the client connection.</span>
+<span class="doccomment">//!   // For each messages, print it&#39;s payload.</span>
+<span class="doccomment">//!   let _actual_nb_of_messages_processed = client.poll_messages::&lt;100, _&gt;(|message| {</span>
+<span class="doccomment">//!     println!(core::str::from_utf8(message.payload()).unwrap());</span>
+<span class="doccomment">//!   });</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!   // Don&#39;t do anything with events.</span>
+<span class="doccomment">//!   // One would check the event for connection status, i.e. doing something when we are connected/disconnected from the server.</span>
+<span class="doccomment">//!   let _actual_nb_of_events_processed = client.poll_event::&lt;100, _&gt;(|_| {</span>
+<span class="doccomment">//!   });</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!   // Sleep a little bit.</span>
+<span class="doccomment">//!   std::thread::sleep(Duration::from_millis(10))</span>
+<span class="doccomment">//! }</span>
+<span class="doccomment">//! ```</span>
+
+<span class="kw">use</span> <span class="ident">crossbeam_queue::SegQueue</span>;
 <span class="kw">use</span> <span class="ident">either::Either</span>;
-<span class="kw">use</span> <span class="ident">gns_sys::bindings</span>::<span class="kw-2">*</span>;
+<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">gns_sys</span> <span class="kw">as</span> <span class="ident">sys</span>;
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">ffi</span>::{<span class="ident">c_void</span>, <span class="ident">CStr</span>, <span class="ident">CString</span>},
     <span class="ident">marker::PhantomData</span>,
@@ -914,16 +1019,17 @@
     <span class="ident">sync::atomic::AtomicBool</span>,
     <span class="ident">time::Duration</span>,
 };
+<span class="kw">use</span> <span class="ident">sys</span>::<span class="kw-2">*</span>;
 
 <span class="doccomment">/// A network message number. Simple alias for documentation.</span>
 <span class="kw">pub</span> <span class="kw">type</span> <span class="ident">GnsMessageNumber</span> <span class="op">=</span> <span class="ident">u64</span>;
 
-<span class="doccomment">/// Outcome of many functions from this library, basic type alias with steam [`EResult`] as error.</span>
-<span class="doccomment">/// If the result is [`EResult::k_EResultOK`], the value can safely be wrapped, otherwise we return the error.</span>
+<span class="doccomment">/// Outcome of many functions from this library, basic type alias with steam [`sys::EResult`] as error.</span>
+<span class="doccomment">/// If the result is [`sys::EResult::k_EResultOK`], the value can safely be wrapped, otherwise we return the error.</span>
 <span class="kw">pub</span> <span class="kw">type</span> <span class="ident">GnsResult</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">EResult</span><span class="op">&gt;</span>;
 
-<span class="doccomment">/// Wrapper around steam [`EResult`].</span>
-<span class="doccomment">/// The library ensure that the wrapped value is not [`EResult::k_EResultOK`].</span>
+<span class="doccomment">/// Wrapper around steam [`sys::EResult`].</span>
+<span class="doccomment">/// The library ensure that the wrapped value is not [`sys::EResult::k_EResultOK`].</span>
 <span class="attribute">#[<span class="ident">repr</span>(<span class="ident">transparent</span>)]</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Copy</span>, <span class="ident">Clone</span>, <span class="ident">Hash</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">PartialOrd</span>, <span class="ident">Ord</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">GnsError</span>(<span class="ident">EResult</span>);
@@ -953,10 +1059,9 @@
 <span class="kw">static</span> <span class="ident">GNS_INIT</span>: <span class="ident">AtomicBool</span> <span class="op">=</span> <span class="ident">AtomicBool::new</span>(<span class="bool-val">false</span>);
 
 <span class="doccomment">/// This is an empty type used to wrap the initialization/destruction of the low-level *GameNetworkingSockets*.</span>
+<span class="doccomment">/// On construction</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">GnsGlobal</span>(());
 
-<span class="doccomment">/// If an instance of [`GnsGlobal`] exists, we know that a call to [`GameNetworkingSockets_Init`] has been made.</span>
-<span class="doccomment">/// Thus, we can safely destroy the low-level networking state.</span>
 <span class="kw">impl</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">GnsGlobal</span> {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) {
         <span class="kw">unsafe</span> {
@@ -970,6 +1075,9 @@
     <span class="doccomment">/// Try to acquire the [`GnsGlobal`] instance.</span>
     <span class="doccomment">/// This function will succeed only if there is no instance already created.</span>
     <span class="doccomment">/// The result might be dropped/recreated safely though.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// If successful, a call to [`sys::GameNetworkingSockets_Init`] has been made.</span>
+    <span class="doccomment">/// Note that the drop implementation ensure that [`sys::GameNetworkingSockets_Kill`] is called.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get</span>() -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">String</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="ident">GNS_INIT</span>.<span class="ident">compare_exchange</span>(
             <span class="bool-val">false</span>,
@@ -1000,11 +1108,11 @@
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">socket</span>: <span class="kw-2">&amp;</span><span class="ident">GnsSocket</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>);
 }
 
-<span class="doccomment">/// Opaque wrapper around the low-level [`HSteamListenSocket`].</span>
+<span class="doccomment">/// Opaque wrapper around the low-level [`sys::HSteamListenSocket`].</span>
 <span class="attribute">#[<span class="ident">repr</span>(<span class="ident">transparent</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">GnsListenSocket</span>(<span class="ident">HSteamListenSocket</span>);
 
-<span class="doccomment">/// Opaque wrapper around the low-level [`HSteamNetPollGroup`].</span>
+<span class="doccomment">/// Opaque wrapper around the low-level [`sys::HSteamNetPollGroup`].</span>
 <span class="attribute">#[<span class="ident">repr</span>(<span class="ident">transparent</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">GnsPollGroup</span>(<span class="ident">HSteamNetPollGroup</span>);
 
@@ -1412,11 +1520,9 @@
     }
 }
 
-<span class="doccomment">/// Wrapper around mutiple low-level pointers.</span>
-<span class="doccomment">/// The socket is generic over the lifetime of both [`GnsGlobal`] and [`GnsUtils`] as they are required during its lifetime.</span>
-<span class="doccomment">/// The generic state `S` is evolving from [`IsCreated`] to either [`IsClient`] or [`IsServer`] depending on the functions used.</span>
-<span class="doccomment">/// The drop implementation make sure that everything related to this structure is correctly freed.</span>
-<span class="doccomment">/// The user has a strong guarantee that all the embedded points has been validated and thus, the available operations over the socket are **safe**.</span>
+<span class="doccomment">/// [`GnsSocket`] is the most important structure of this library.</span>
+<span class="doccomment">/// This structure is used to create client ([`GnsSocket&lt;IsClient&gt;`]) and server ([`GnsSocket&lt;IsServer&gt;`]) sockets via the [`GnsSocket::connect`] and [`GnsSocket::listen`] functions.</span>
+<span class="doccomment">/// The drop implementation make sure that everything related to this structure is correctly freed, except the [`GnsGlobal`] and [`GnsUtils`] instances and the user has a strong guarantee that all the available operations over the socket are **safe**.</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">GnsSocket</span><span class="op">&lt;</span><span class="lifetime">&#39;x</span>, <span class="lifetime">&#39;y</span>, <span class="ident">S</span>: <span class="ident">GnsDroppable</span><span class="op">&gt;</span> {
     <span class="ident">global</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;x</span> <span class="ident">GnsGlobal</span>,
     <span class="ident">utils</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;y</span> <span class="ident">GnsUtils</span>,
@@ -1452,6 +1558,8 @@
 <span class="kw">where</span>
     <span class="ident">S</span>: <span class="ident">GnsDroppable</span> <span class="op">+</span> <span class="ident">IsReady</span>,
 {
+    <span class="doccomment">/// Get a connection lane status.</span>
+    <span class="doccomment">/// This call is possible only if lanes has been previously configured using configure_connection_lanes</span>
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_connection_real_time_status</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
