@@ -1,3 +1,4 @@
+use gns::sys::*;
 use gns::*;
 use std::{
     collections::HashMap,
@@ -5,7 +6,6 @@ use std::{
     sync::mpsc::{self, Receiver},
     time::{Duration, Instant},
 };
-use gns_sys::bindings::*;
 
 // **unwrap** must be banned in production. unless you **know** what you are doing.
 

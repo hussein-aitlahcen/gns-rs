@@ -1,6 +1,6 @@
 use crossbeam_queue::SegQueue;
 use either::Either;
-use gns_sys::bindings::*;
+pub use gns_sys as sys;
 use std::{
     ffi::{c_void, CStr, CString},
     marker::PhantomData,
@@ -10,6 +10,7 @@ use std::{
     sync::atomic::AtomicBool,
     time::Duration,
 };
+use sys::*;
 
 /// A network message number. Simple alias for documentation.
 pub type GnsMessageNumber = u64;
