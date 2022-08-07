@@ -1,3 +1,54 @@
+//! # Rust wrapper for Valve GameNetworkingSockets.
+//!
+//! Provides an abstraction over the low-level library.
+//! There are multiple advantage to use this abstraction:
+//! - Type safety: most of the low-level structures are wrapped and we leverage the type system to restrict the operations such that they are all **safe**.
+//! - High level: the library abstract most of the structure in such a way that you don't have to deal with the low-level FFI plumbering required. The API is idiomatic, pure Rust.
+//!
+//! # Example
+//!
+//! ```
+//! // **uwrap** must be banned in production, we use it here to extract the most relevant part of the library.
+//!
+//! // Initial the global networking state. Note that this instance must be unique per-process.
+//! let gns_global = GnsGlobal::get().unwrap();
+//! let gns_utils = GnsUtils::new().unwrap();
+//!
+//! // Create a new socket, the index type [`IsCreated`] is used to determine the state of the socket.
+//! // The [`GnsSocket::new`] function is only available for the [`IsCreated`] state. This is the initial state of the socket.
+//! let gns_socket = GnsSocket::<IsCreated>::new().unwrap();
+//!
+//! // We now do a transition from [`IsCreated`] to the [`IsClient`] state. The [`GnsSocket::connect`] operation does this transition for us.
+//! // Since we are now using a client socket, we have access to a different set of operations.
+//! let client = gns_socket.connect(Ipv6Addr::LOCALHOST, port).unwrap();
+//!
+//! // Now that we initiated a connection, there is three operation we must loop over:
+//! // - polling for new messages
+//! // - polling for connection status change
+//! // - polling for callbacks (low-level callbacks required by the underlying library).
+//! // Important to know, regardless of the type of socket, whether it is in [`IsClient`] or [`IsServer`] state, theses three operations are the same.
+//! // The only difference is that polling for messages and status on the client only act on the client connection, while polling for messages and status on a server yield event for all connected clients.
+//!
+//! loop {
+//!   // Run the low-level callbacks.
+//!   client.poll_callbacks();
+//!
+//!   // Receive a maximum of 100 messages on the client connection.
+//!   // For each messages, print it's payload.
+//!   let _actual_nb_of_messages_processed = client.poll_messages::<100, _>(|message| {
+//!     println!(core::str::from_utf8(message.payload()).unwrap());
+//!   });
+//!
+//!   // Don't do anything with events.
+//!   // One would check the event for connection status, i.e. doing something when we are connected/disconnected from the server.
+//!   let _actual_nb_of_events_processed = client.poll_event::<100, _>(|_| {
+//!   });
+//!
+//!   // Sleep a little bit.
+//!   std::thread::sleep(Duration::from_millis(10))
+//! }
+//! ```
+
 use crossbeam_queue::SegQueue;
 use either::Either;
 pub use gns_sys as sys;
@@ -15,12 +66,12 @@ use sys::*;
 /// A network message number. Simple alias for documentation.
 pub type GnsMessageNumber = u64;
 
-/// Outcome of many functions from this library, basic type alias with steam [`EResult`] as error.
-/// If the result is [`EResult::k_EResultOK`], the value can safely be wrapped, otherwise we return the error.
+/// Outcome of many functions from this library, basic type alias with steam [`sys::EResult`] as error.
+/// If the result is [`sys::EResult::k_EResultOK`], the value can safely be wrapped, otherwise we return the error.
 pub type GnsResult<T> = Result<T, EResult>;
 
-/// Wrapper around steam [`EResult`].
-/// The library ensure that the wrapped value is not [`EResult::k_EResultOK`].
+/// Wrapper around steam [`sys::EResult`].
+/// The library ensure that the wrapped value is not [`sys::EResult::k_EResultOK`].
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GnsError(EResult);
@@ -50,10 +101,9 @@ impl From<GnsError> for GnsResult<()> {
 static GNS_INIT: AtomicBool = AtomicBool::new(false);
 
 /// This is an empty type used to wrap the initialization/destruction of the low-level *GameNetworkingSockets*.
+/// On construction
 pub struct GnsGlobal(());
 
-/// If an instance of [`GnsGlobal`] exists, we know that a call to [`GameNetworkingSockets_Init`] has been made.
-/// Thus, we can safely destroy the low-level networking state.
 impl Drop for GnsGlobal {
     fn drop(&mut self) {
         unsafe {
@@ -67,6 +117,9 @@ impl GnsGlobal {
     /// Try to acquire the [`GnsGlobal`] instance.
     /// This function will succeed only if there is no instance already created.
     /// The result might be dropped/recreated safely though.
+    ///
+    /// If successful, a call to [`sys::GameNetworkingSockets_Init`] has been made.
+    /// Note that the drop implementation ensure that [`sys::GameNetworkingSockets_Kill`] is called.
     pub fn get() -> Result<Self, String> {
         if GNS_INIT.compare_exchange(
             false,
@@ -97,11 +150,11 @@ pub trait GnsDroppable: Sized {
     fn drop(&self, socket: &GnsSocket<Self>);
 }
 
-/// Opaque wrapper around the low-level [`HSteamListenSocket`].
+/// Opaque wrapper around the low-level [`sys::HSteamListenSocket`].
 #[repr(transparent)]
 pub struct GnsListenSocket(HSteamListenSocket);
 
-/// Opaque wrapper around the low-level [`HSteamNetPollGroup`].
+/// Opaque wrapper around the low-level [`sys::HSteamNetPollGroup`].
 #[repr(transparent)]
 pub struct GnsPollGroup(HSteamNetPollGroup);
 
@@ -509,11 +562,9 @@ impl GnsConnectionEvent {
     }
 }
 
-/// Wrapper around mutiple low-level pointers.
-/// The socket is generic over the lifetime of both [`GnsGlobal`] and [`GnsUtils`] as they are required during its lifetime.
-/// The generic state `S` is evolving from [`IsCreated`] to either [`IsClient`] or [`IsServer`] depending on the functions used.
-/// The drop implementation make sure that everything related to this structure is correctly freed.
-/// The user has a strong guarantee that all the embedded points has been validated and thus, the available operations over the socket are **safe**.
+/// [`GnsSocket`] is the most important structure of this library.
+/// This structure is used to create client ([`GnsSocket<IsClient>`]) and server ([`GnsSocket<IsServer>`]) sockets via the [`GnsSocket::connect`] and [`GnsSocket::listen`] functions.
+/// The drop implementation make sure that everything related to this structure is correctly freed, except the [`GnsGlobal`] and [`GnsUtils`] instances and the user has a strong guarantee that all the available operations over the socket are **safe**.
 pub struct GnsSocket<'x, 'y, S: GnsDroppable> {
     global: &'x GnsGlobal,
     utils: &'y GnsUtils,
@@ -549,6 +600,8 @@ impl<'x, 'y, S> GnsSocket<'x, 'y, S>
 where
     S: GnsDroppable + IsReady,
 {
+    /// Get a connection lane status.
+    /// This call is possible only if lanes has been previously configured using configure_connection_lanes
     #[inline]
     pub fn get_connection_real_time_status(
         &self,
