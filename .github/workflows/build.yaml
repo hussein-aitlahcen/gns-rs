@@ -10,7 +10,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: 'true'
-      - name: Test
+      - name: Build
         run: |
           sudo apt-get install autoconf pkg-config libprotobuf-c-dev protobuf-compiler libssl-dev
           RUST_LOG=debug cargo build -p example -vvv
@@ -23,11 +23,10 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: 'true'
-      - name: Test
+      - name: Build
         run: |
-          vcpkg install protobuf:x64-windows-static
           choco install openssl
           choco install protoc
           git clone --depth 1 --branch v3.20.1 https://github.com/protocolbuffers/protobuf
           $Env:CPLUS_INCLUDE_PATH = "C:\Program Files\OpenSSL-Win64\include\;$((Get-Location).Path)\protobuf\src"
-          cargo build -p example -vvv
+          cargo build -p gns -vvv
