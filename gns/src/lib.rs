@@ -676,7 +676,7 @@ where
     }
 
     #[inline]
-    pub fn poll_messages<const K: usize, F>(&self, mut message_callback: F) -> usize
+    pub fn poll_messages<const K: usize, F>(&self, mut message_callback: F) -> Option<usize>
     where
         F: FnMut(&GnsNetworkMessage<ToReceive>),
     {
@@ -684,10 +684,14 @@ where
         let mut messages: [GnsNetworkMessage<ToReceive>; K] =
             unsafe { MaybeUninit::zeroed().assume_init() };
         let nb_of_messages = self.state.receive(&self, &mut messages);
-        for message in messages.into_iter().take(nb_of_messages) {
-            message_callback(&message);
+        if nb_of_messages == usize::MAX {
+            None
+        } else {
+            for message in messages.into_iter().take(nb_of_messages) {
+                message_callback(&message);
+            }
+            Some(nb_of_messages)
         }
-        nb_of_messages
     }
 
     #[inline]

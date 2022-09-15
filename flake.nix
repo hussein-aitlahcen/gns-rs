@@ -20,7 +20,6 @@
         };
       in with pkgs;
       let
-        # Nightly rust used for wasm runtime compilation
         rust-nightly = rust-bin.nightly.latest.default;
       in rec {
         devShell = mkShell {
