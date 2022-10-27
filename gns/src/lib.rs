@@ -933,7 +933,11 @@ impl GnsUtils {
 
     #[inline]
     pub fn enable_debug_output(&self, ty: ESteamNetworkingSocketsDebugOutputType) {
-        unsafe extern "C" fn debug(ty: ESteamNetworkingSocketsDebugOutputType, msg: *const i8) {
+        #[cfg(target_arch = "aarch64")]
+        type MsgPtr = *const u8;
+        #[cfg(target_arch = "x86_64")]
+        type MsgPtr = *const i8;
+        unsafe extern "C" fn debug(ty: ESteamNetworkingSocketsDebugOutputType, msg: MsgPtr) {
             println!("{:#?}: {}", ty, CStr::from_ptr(msg).to_string_lossy());
         }
         unsafe {
