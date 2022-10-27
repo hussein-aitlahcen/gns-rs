@@ -1,5 +1,5 @@
 {
-  description = "Cosmwasm VM";
+  description = "Valve GameNetworkingSockets Wrapper";
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
     flake-utils = {
@@ -9,6 +9,7 @@
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
     };
   };
   outputs = { self, nixpkgs, flake-utils, rust-overlay }:
@@ -20,7 +21,9 @@
         };
       in with pkgs;
       let
-        rust-nightly = rust-bin.nightly.latest.default;
+        rust-nightly = rust-bin.nightly.latest.default.override {
+          extensions = [ "rust-src" "rust-analyzer" ];
+        };
       in rec {
         devShell = mkShell {
           buildInputs = [ rust-nightly clang protobuf openssl pkg-config  ];
