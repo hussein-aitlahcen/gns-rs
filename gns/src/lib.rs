@@ -920,6 +920,11 @@ impl Drop for GnsUtils {
     }
 }
 
+#[cfg(target_arch = "aarch64")]
+type MsgPtr = *const u8;
+#[cfg(target_arch = "x86_64")]
+type MsgPtr = *const i8;
+
 impl GnsUtils {
     #[inline]
     pub fn new() -> Option<Self> {
@@ -932,13 +937,17 @@ impl GnsUtils {
     }
 
     #[inline]
-    pub fn enable_debug_output(&self, ty: ESteamNetworkingSocketsDebugOutputType) {
-        #[cfg(target_arch = "aarch64")]
-        type MsgPtr = *const u8;
-        #[cfg(target_arch = "x86_64")]
-        type MsgPtr = *const i8;
+    pub fn enable_debug_output(
+        &self,
+        ty: ESteamNetworkingSocketsDebugOutputType,
+        f: fn(ty: ESteamNetworkingSocketsDebugOutputType, msg: String),
+    ) {
+        static mut F: Option<fn(ty: ESteamNetworkingSocketsDebugOutputType, msg: String)> = None;
+        unsafe {
+            F = Some(f);
+        }
         unsafe extern "C" fn debug(ty: ESteamNetworkingSocketsDebugOutputType, msg: MsgPtr) {
-            println!("{:#?}: {}", ty, CStr::from_ptr(msg).to_string_lossy());
+            F.unwrap()(ty, CStr::from_ptr(msg).to_string_lossy().to_string());
         }
         unsafe {
             SteamAPI_ISteamNetworkingUtils_SetDebugOutputFunction(self.0, ty, Some(debug));

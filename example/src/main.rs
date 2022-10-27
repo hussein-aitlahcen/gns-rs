@@ -39,6 +39,7 @@ fn server(port: u16) {
     // The current rust implementation flush the log in stdout.
     server.utils().enable_debug_output(
         ESteamNetworkingSocketsDebugOutputType::k_ESteamNetworkingSocketsDebugOutputType_Everything,
+        |ty, message| println!("{:#?}: {}", ty, message),
     );
 
     let mut last_update = Instant::now();
@@ -186,6 +187,7 @@ fn client(port: u16) {
 
     client.utils().enable_debug_output(
         ESteamNetworkingSocketsDebugOutputType::k_ESteamNetworkingSocketsDebugOutputType_Everything,
+        |ty, message| println!("{:#?}: {}", ty, message),
     );
 
     let user_input_stream = user_input();
