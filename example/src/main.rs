@@ -88,7 +88,7 @@ fn server(port: u16) {
         };
 
         // Process connections events.
-        let _events_processed = server.poll_event::<100, _>(|event| {
+        let _events_processed = server.poll_event::<100>(|event| {
           match (event.old_state(), event.info().state()) {
             // A client is about to connect, accept it.
             (
@@ -141,7 +141,7 @@ fn server(port: u16) {
         });
 
         // Process some messages, we arbitrary define 100 as being the max number of messages we can handle per iteration.
-        let _messages_processed = server.poll_messages::<100, _>(|message| {
+        let _messages_processed = server.poll_messages::<100>(|message| {
             // **unwrap** must be banned in production.
             let chat_message = core::str::from_utf8(message.payload()).unwrap();
             println!("Boarcasting {}", chat_message);
@@ -196,7 +196,7 @@ fn client(port: u16) {
         client.poll_callbacks();
 
         // Process some messages, we arbitrary define 100 as being the max number of messages we can handle per iteration.
-        let _messages_processed = client.poll_messages::<100, _>(|message| {
+        let _messages_processed = client.poll_messages::<100>(|message| {
             println!(
                 "(Chat) {}",
                 // **unwrap** must be banned in production.
@@ -206,7 +206,7 @@ fn client(port: u16) {
 
         let mut quit = false;
         let _ =
-            client.poll_event::<100, _>(|event| match (event.old_state(), event.info().state()) {
+            client.poll_event::<100>(|event| match (event.old_state(), event.info().state()) {
                 (
                     ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_None,
                     ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting,

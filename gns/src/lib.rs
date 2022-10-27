@@ -676,10 +676,10 @@ where
     }
 
     #[inline]
-    pub fn poll_messages<const K: usize, F>(&self, mut message_callback: F) -> Option<usize>
-    where
-        F: FnMut(&GnsNetworkMessage<ToReceive>),
-    {
+    pub fn poll_messages<const K: usize>(
+        &self,
+        mut message_callback: impl FnMut(&GnsNetworkMessage<ToReceive>),
+    ) -> Option<usize> {
         // Do not implements default for networking messages as they must be allocated by the lib.
         let mut messages: [GnsNetworkMessage<ToReceive>; K] =
             unsafe { MaybeUninit::zeroed().assume_init() };
@@ -695,10 +695,10 @@ where
     }
 
     #[inline]
-    pub fn poll_event<const K: usize, F>(&self, mut event_callback: F) -> usize
-    where
-        F: FnMut(GnsConnectionEvent),
-    {
+    pub fn poll_event<const K: usize>(
+        &self,
+        mut event_callback: impl FnMut(GnsConnectionEvent),
+    ) -> usize {
         let mut processed = 0;
         'a: while let Some(event) = self.state.queue().pop() {
             event_callback(event);
