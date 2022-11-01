@@ -815,7 +815,6 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
               m_int64: queue as *const _ as i64
             }
         }];
-
         (addr, options)
     }
 
@@ -912,6 +911,14 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsClient> {
     }
 }
 
+/// The configuration value used to define configure global variables in [`GnsUtils::set_global_config_value`]
+pub enum GnsConfig<'a> {
+    Float(f32),
+    Int32(u32),
+    String(&'a str),
+    Ptr(*mut c_void),
+}
+
 pub struct GnsUtils(*mut ISteamNetworkingUtils);
 
 impl Drop for GnsUtils {
@@ -966,6 +973,38 @@ impl GnsUtils {
         let message_ptr =
             unsafe { SteamAPI_ISteamNetworkingUtils_AllocateMessage(self.0, payload.len() as _) };
         GnsNetworkMessage::new(message_ptr, conn, flags, payload)
+    }
+
+    /// Set a global configuration value, i.e. k_ESteamNetworkingConfig_FakePacketLag_Send => 1000 ms
+    #[inline]
+    pub fn set_global_config_value<'a>(
+        &self,
+        typ: ESteamNetworkingConfigValue,
+        value: GnsConfig<'a>,
+    ) -> Result<(), ()> {
+        let result = match value {
+            GnsConfig::Float(x) => unsafe {
+                SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValueFloat(self.0, typ, x)
+            },
+            GnsConfig::Int32(x) => unsafe {
+                SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValueInt32(self.0, typ, x as i32)
+            },
+            GnsConfig::String(x) => unsafe {
+                SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValueString(
+                    self.0,
+                    typ,
+                    CString::new(x).expect("str; qed;").as_c_str().as_ptr(),
+                )
+            },
+            GnsConfig::Ptr(x) => unsafe {
+                SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValuePtr(self.0, typ, x)
+            },
+        };
+        if result {
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 
     #[inline]
