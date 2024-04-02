@@ -14,6 +14,7 @@ Libraries:
 - `gns` is the high level, type-safe Rust wrapper.
 
 System libraries required:
+- `clang`
 - `protobuf`
 - `openssl`
-
+- `abseil`

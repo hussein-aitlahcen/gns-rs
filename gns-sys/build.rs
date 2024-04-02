@@ -7,6 +7,8 @@ fn main() {
     println!("cargo:rustc-link-lib=protobuf");
     println!("cargo:rustc-link-lib=crypto");
     println!("cargo:rustc-link-lib=ssl");
+    println!("cargo:rustc-link-lib=absl_log_internal_check_op");
+    println!("cargo:rustc-link-lib=absl_log_internal_message");
 
     let bindings = bindgen::Builder::default()
         .clang_arg("-Ithirdparty/GameNetworkingSockets/include/")
@@ -29,8 +31,8 @@ fn main() {
             non_exhaustive: false,
         })
         .clang_arg("-xc++")
-        .clang_arg("-std=c++11")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .clang_arg("-std=c++20")
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
 
@@ -45,7 +47,7 @@ fn main() {
       "thirdparty/GameNetworkingSockets/src/common/steamnetworkingsockets_messages.proto",
       "thirdparty/GameNetworkingSockets/src/common/steamnetworkingsockets_messages_certs.proto",
       "thirdparty/GameNetworkingSockets/src/common/steamnetworkingsockets_messages_udp.proto"
-    ]).current_dir(&Path::new("./"))
+    ]).current_dir(Path::new("./"))
     .status().unwrap();
 
     let mut cc = cc::Build::new();
@@ -59,9 +61,9 @@ fn main() {
 
     cc.cpp(true)
         .define("STEAMNETWORKINGSOCKETS_STATIC_LINK", None)
-        .define("STEAMNETWORKINGSOCKETS_CRYPTO_VALVEOPENSSL", None)
-        .define("VALVE_CRYPTO_25519_OPENSSL", None)
+        .define("VALVE_CRYPTO_OPENSSL", None)
         .define("VALVE_CRYPTO_ENABLE_25519", None)
+        .define("VALVE_CRYPTO_25519_OPENSSLEVP", None)
         .include("thirdparty/GameNetworkingSockets/include/")
         .include("thirdparty/GameNetworkingSockets/src/public/")
         .include("thirdparty/GameNetworkingSockets/src/common/")
@@ -71,6 +73,8 @@ fn main() {
             "thirdparty/GameNetworkingSockets/src/common/keypair.cpp",
             "thirdparty/GameNetworkingSockets/src/common/crypto_openssl.cpp",
             "thirdparty/GameNetworkingSockets/src/common/crypto_25519_openssl.cpp",
+            "thirdparty/GameNetworkingSockets/src/common/crypto_digest_opensslevp.cpp",
+            "thirdparty/GameNetworkingSockets/src/common/crypto_symmetric_opensslevp.cpp",
             "thirdparty/GameNetworkingSockets/src/common/opensslwrapper.cpp",
         ])
         .files([
@@ -105,7 +109,7 @@ fn main() {
 
         ])
         .compiler("clang++")
-        .flag("-std=c++14")
+        .flag("-std=c++20")
         .flag("-fvisibility=hidden")
         .flag("-fno-strict-aliasing")
         .flag("-Wall")
@@ -115,6 +119,7 @@ fn main() {
         .flag("-Wno-unused-const-variable")
         .flag("-Wno-unused-parameter")
         .flag("-Wno-nested-anon-types")
+        .flag("-O")
         .static_flag(true)
         .compile("GameNetworkingSockets");
 }

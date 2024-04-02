@@ -26,11 +26,11 @@
         };
       in rec {
         devShell = mkShell {
-          buildInputs = [ rust-nightly clang protobuf openssl pkg-config  ];
+          buildInputs = [ rust-nightly clang_15 openssl protobuf abseil-cpp_202401 pkg-config  ];
           PROTOC = "${protobuf}/bin/protoc";
-          LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
+          LIBCLANG_PATH = "${llvmPackages_15.libclang.lib}/lib";
           LD_LIBRARY_PATH =
-            lib.makeLibraryPath [ clangStdenv.cc.cc.lib openssl protobuf ];
+            lib.makeLibraryPath [ clang15Stdenv.cc.cc.lib openssl protobuf abseil-cpp_202401 ];
           CPLUS_INCLUDE_PATH = "${openssl.dev}/include";
         };
       });
