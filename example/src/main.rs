@@ -18,7 +18,7 @@ fn server(port: u16) {
     // **unwrap** must be banned in production.
     let gns_utils = GnsUtils::new().unwrap();
 
-    // Add 1000ms ping to everyone connecting.
+    // Add fake 1000ms ping to everyone connecting.
     // **unwrap** must be banned in production.
     gns_utils
         .set_global_config_value(

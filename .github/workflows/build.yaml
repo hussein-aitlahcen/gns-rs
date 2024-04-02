@@ -7,26 +7,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: 'true'
+      - uses: cachix/install-nix-action@v22
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
       - name: Build
         run: |
-          sudo apt-get install autoconf pkg-config libprotobuf-c-dev protobuf-compiler libssl-dev
-          RUST_LOG=debug cargo build -p example -vvv
+          nix develop -L --command bash -c "RUST_LOG=debug cargo build -p example -vvv"
 
-  build-windows:
-    name: Windows
-    runs-on: windows-latest
-    steps:
-      - name: Setup | Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: 'true'
-      - name: Build
-        run: |
-          choco install openssl
-          choco install protoc
-          git clone --depth 1 --branch v3.20.1 https://github.com/protocolbuffers/protobuf
-          $Env:CPLUS_INCLUDE_PATH = "C:\Program Files\OpenSSL-Win64\include\;$((Get-Location).Path)\protobuf\src"
-          cargo build -p gns -vvv
+  # build-windows:
+  #   name: Windows
+  #   runs-on: windows-latest
+  #   steps:
+  #     - name: Setup | Checkout
+  #       uses: actions/checkout@v4
+  #       with:
+  #         submodules: 'true'
+  #     - name: Build
+  #       run: |
+  #         choco install openssl
+  #         choco install protoc
+  #         TODO: couldn't fine abseil as installable lib with choco?
+  #         choco install absl
+  #         git clone --depth 1 --branch 24.x https://github.com/protocolbuffers/protobuf
+  #         $Env:CPLUS_INCLUDE_PATH = "C:\Program Files\OpenSSL-Win64\include\;$((Get-Location).Path)\protobuf\src"
+  #         cargo build -p gns -vvv
