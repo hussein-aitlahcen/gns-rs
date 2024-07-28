@@ -18,3 +18,6 @@ System libraries required:
 - `protobuf`
 - `openssl`
 - `abseil`
+
+Tools required to be in $PATH:
+- `protobuf-compiler`
