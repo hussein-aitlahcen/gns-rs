@@ -348,7 +348,7 @@ where
     }
 
     #[inline]
-    pub fn flags(&self) -> u32 {
+    pub fn flags(&self) -> i32 {
         unsafe { (*self.0).m_nFlags as _ }
     }
 
