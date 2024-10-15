@@ -348,7 +348,7 @@ where
     }
 
     #[inline]
-    pub fn flags(&self) -> u32 {
+    pub fn flags(&self) -> i32 {
         unsafe { (*self.0).m_nFlags as _ }
     }
 
@@ -434,6 +434,13 @@ impl GnsConnectionInfo {
     #[inline]
     pub fn end_reason(&self) -> u32 {
         self.0.m_eEndReason as u32
+    }
+
+    #[inline]
+    pub fn end_debug(&self) -> &str {
+        unsafe { CStr::from_ptr(self.0.m_szEndDebug.as_ptr()) }
+            .to_str()
+            .unwrap_or("")
     }
 
     #[inline]
