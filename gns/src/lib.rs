@@ -437,6 +437,13 @@ impl GnsConnectionInfo {
     }
 
     #[inline]
+    pub fn end_debug(&self) -> &str {
+        unsafe { CStr::from_ptr(self.0.m_szEndDebug.as_ptr()) }
+            .to_str()
+            .unwrap_or("")
+    }
+
+    #[inline]
     pub fn remote_address(&self) -> Ipv6Addr {
         Ipv6Addr::from(unsafe { self.0.m_addrRemote.__bindgen_anon_1.m_ipv6 })
     }
