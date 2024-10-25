@@ -14,4 +14,4 @@ crate-type = ["rlib", "staticlib"]
 
 [build-dependencies]
 bindgen = "0.69"
-cc = "1"
+cc = { version = "1.0", features = ["parallel"] }
