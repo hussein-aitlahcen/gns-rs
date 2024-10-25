@@ -13,5 +13,5 @@ categories = ["games"]
 crate-type = ["rlib", "staticlib"]
 
 [build-dependencies]
-bindgen = "0.69"
+bindgen = "0.70"
 cc = { version = "1.1.31", features = ["parallel"] }
