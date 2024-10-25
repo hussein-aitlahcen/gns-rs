@@ -136,7 +136,7 @@ impl GnsGlobal {
                 GNS_INIT.store(false, std::sync::atomic::Ordering::SeqCst);
                 Err(format!(
                     "{}",
-                    core::str::from_utf8_unchecked(core::mem::transmute(&error[..]))
+                    CStr::from_ptr(error.as_ptr()).to_str().unwrap_or("")
                 ))
             } else {
                 Ok(GnsGlobal(()))
