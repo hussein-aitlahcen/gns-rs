@@ -20,7 +20,7 @@
 //!
 //! // We now do a transition from [`IsCreated`] to the [`IsClient`] state. The [`GnsSocket::connect`] operation does this transition for us.
 //! // Since we are now using a client socket, we have access to a different set of operations.
-//! let client = gns_socket.connect(Ipv6Addr::LOCALHOST, port).unwrap();
+//! let client = gns_socket.connect(Ipv6Addr::LOCALHOST.into(), port).unwrap();
 //!
 //! // Now that we initiated a connection, there is three operation we must loop over:
 //! // - polling for new messages
@@ -56,7 +56,7 @@ use std::{
     ffi::{c_void, CStr, CString},
     marker::PhantomData,
     mem::MaybeUninit,
-    net::Ipv6Addr,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
     pin::Pin,
     sync::atomic::AtomicBool,
     time::Duration,
@@ -444,8 +444,15 @@ impl GnsConnectionInfo {
     }
 
     #[inline]
-    pub fn remote_address(&self) -> Ipv6Addr {
-        Ipv6Addr::from(unsafe { self.0.m_addrRemote.__bindgen_anon_1.m_ipv6 })
+    pub fn remote_address(&self) -> IpAddr {
+        let ipv4 = unsafe { self.0.m_addrRemote.__bindgen_anon_1.m_ipv4 };
+        if ipv4.m_8zeros == 0 && ipv4.m_0000 == 0 && ipv4.m_ffff == 0xffff {
+            IpAddr::from(Ipv4Addr::from(ipv4.m_ip))
+        } else {
+            IpAddr::from(Ipv6Addr::from(unsafe {
+                self.0.m_addrRemote.__bindgen_anon_1.m_ipv6
+            }))
+        }
     }
 
     #[inline]
@@ -799,13 +806,23 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
 
     #[inline]
     fn setup_common(
-        address: Ipv6Addr,
+        address: IpAddr,
         port: u16,
         queue: &SegQueue<GnsConnectionEvent>,
     ) -> (SteamNetworkingIPAddr, [SteamNetworkingConfigValue_t; 2]) {
         let addr = SteamNetworkingIPAddr {
-            __bindgen_anon_1: SteamNetworkingIPAddr__bindgen_ty_2 {
-                m_ipv6: address.octets(),
+            __bindgen_anon_1: match address {
+                IpAddr::V4(address) => SteamNetworkingIPAddr__bindgen_ty_2 {
+                    m_ipv4: SteamNetworkingIPAddr_IPv4MappedAddress {
+                        m_8zeros: 0,
+                        m_0000: 0,
+                        m_ffff: 0xffff,
+                        m_ip: address.octets(),
+                    },
+                },
+                IpAddr::V6(address) => SteamNetworkingIPAddr__bindgen_ty_2 {
+                    m_ipv6: address.octets(),
+                },
             },
             m_port: port,
         };
@@ -827,7 +844,7 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
 
     /// Listen for incoming connections, the socket transition from [`IsCreated`] to [`IsServer`], allowing a new set of server operations.
     #[inline]
-    pub fn listen(self, address: Ipv6Addr, port: u16) -> Result<GnsSocket<'x, 'y, IsServer>, ()> {
+    pub fn listen(self, address: IpAddr, port: u16) -> Result<GnsSocket<'x, 'y, IsServer>, ()> {
         let queue = Box::pin(SegQueue::new());
         let (addr, options) = Self::setup_common(address, port, &queue);
         let listen_socket = unsafe {
@@ -862,7 +879,7 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
 
     /// Connect to a remote host, the socket transition from [`IsCreated`] to [`IsClient`], allowing a new set of client operations.
     #[inline]
-    pub fn connect(self, address: Ipv6Addr, port: u16) -> Result<GnsSocket<'x, 'y, IsClient>, ()> {
+    pub fn connect(self, address: IpAddr, port: u16) -> Result<GnsSocket<'x, 'y, IsClient>, ()> {
         let queue = Box::pin(SegQueue::new());
         let (addr, options) = Self::setup_common(address, port, &queue);
         let connection = unsafe {
