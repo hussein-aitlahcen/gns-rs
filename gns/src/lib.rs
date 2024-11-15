@@ -934,10 +934,8 @@ impl Drop for GnsUtils {
     }
 }
 
-#[cfg(target_arch = "aarch64")]
-type MsgPtr = *const u8;
-#[cfg(target_arch = "x86_64")]
-type MsgPtr = *const i8;
+type MsgPtr = *const ::std::os::raw::c_char;
+
 
 impl GnsUtils {
     #[inline]
