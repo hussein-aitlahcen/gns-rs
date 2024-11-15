@@ -40,7 +40,7 @@ fn server(port: u16) {
     let server = GnsSocket::new(&gns_global, &gns_utils)
         // **unwrap** must be banned in production.
         .unwrap()
-        .listen(Ipv6Addr::LOCALHOST, port)
+        .listen(Ipv6Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
 
@@ -190,7 +190,7 @@ fn client(port: u16) {
     let client = GnsSocket::new(&gns_global, &gns_utils)
         // **unwrap** must be banned in production.
         .unwrap()
-        .connect(Ipv6Addr::LOCALHOST, port)
+        .connect(Ipv6Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
 
