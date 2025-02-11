@@ -1,14 +1,26 @@
 use std::{
-    path::{Path, PathBuf},
-    process::Command,
+    env,
+    path::PathBuf,
 };
 
 fn main() {
-    println!("cargo:rustc-link-lib=protobuf");
-    println!("cargo:rustc-link-lib=crypto");
-    println!("cargo:rustc-link-lib=ssl");
-    println!("cargo:rustc-link-lib=absl_log_internal_check_op");
-    println!("cargo:rustc-link-lib=absl_log_internal_message");
+    if cfg!(target_os = "windows") {
+        // These libraries are prefixed with "lib" on Windows
+        println!("cargo:rustc-link-lib=libprotobuf");
+        println!("cargo:rustc-link-lib=libcrypto");
+        println!("cargo:rustc-link-lib=libssl");
+    } else {
+        println!("cargo:rustc-link-lib=protobuf");
+        println!("cargo:rustc-link-lib=crypto");
+        println!("cargo:rustc-link-lib=ssl");
+    }
+
+    if cfg!(target_os = "windows") && cfg!(target_env = "msvc") {
+        println!("cargo:rustc-link-lib=abseil_dll");
+    } else {
+        println!("cargo:rustc-link-lib=absl_log_internal_check_op");
+        println!("cargo:rustc-link-lib=absl_log_internal_message");
+    }
 
     let bindings = bindgen::Builder::default()
         .clang_arg("-Ithirdparty/GameNetworkingSockets/include/")
@@ -41,85 +53,21 @@ fn main() {
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
 
-    Command::new("protoc").args(&[
-      "--proto_path=thirdparty/GameNetworkingSockets/src/common",
-      "--cpp_out=thirdparty/GameNetworkingSockets/src/common/",
-      "thirdparty/GameNetworkingSockets/src/common/steamnetworkingsockets_messages.proto",
-      "thirdparty/GameNetworkingSockets/src/common/steamnetworkingsockets_messages_certs.proto",
-      "thirdparty/GameNetworkingSockets/src/common/steamnetworkingsockets_messages_udp.proto"
-    ]).current_dir(Path::new("./"))
-    .status().unwrap();
+    let mut cmake = cmake::Config::new("thirdparty/GameNetworkingSockets");
 
-    let mut cc = cc::Build::new();
-
-    if cfg!(target_os = "linux") {
-        cc.define("linux", None);
-    } else if cfg!(target_os = "windows") {
-        cc.define("_WIN32", None);
-        cc.define("_WINDOWS", None);
+    let target_features = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
+    if cfg!(target_os = "windows") && cfg!(target_env = "msvc")
+            && target_features.contains("crt-static") {
+        cmake.define("MSVC_CRT_STATIC", "ON");
     }
 
-    cc.cpp(true)
-        .define("STEAMNETWORKINGSOCKETS_STATIC_LINK", None)
-        .define("VALVE_CRYPTO_OPENSSL", None)
-        .define("VALVE_CRYPTO_ENABLE_25519", None)
-        .define("VALVE_CRYPTO_25519_OPENSSLEVP", None)
-        .include("thirdparty/GameNetworkingSockets/include/")
-        .include("thirdparty/GameNetworkingSockets/src/public/")
-        .include("thirdparty/GameNetworkingSockets/src/common/")
-        .files([
-            "thirdparty/GameNetworkingSockets/src/common/crypto.cpp",
-            "thirdparty/GameNetworkingSockets/src/common/crypto_textencode.cpp",
-            "thirdparty/GameNetworkingSockets/src/common/keypair.cpp",
-            "thirdparty/GameNetworkingSockets/src/common/crypto_openssl.cpp",
-            "thirdparty/GameNetworkingSockets/src/common/crypto_25519_openssl.cpp",
-            "thirdparty/GameNetworkingSockets/src/common/crypto_digest_opensslevp.cpp",
-            "thirdparty/GameNetworkingSockets/src/common/crypto_symmetric_opensslevp.cpp",
-            "thirdparty/GameNetworkingSockets/src/common/opensslwrapper.cpp",
-        ])
-        .files([
-            "thirdparty/GameNetworkingSockets/src/common/steamnetworkingsockets_messages.pb.cc",
-            "thirdparty/GameNetworkingSockets/src/common/steamnetworkingsockets_messages_certs.pb.cc",
-            "thirdparty/GameNetworkingSockets/src/common/steamnetworkingsockets_messages_udp.pb.cc",
+    let dst = cmake
+        .profile("Release")
+        .define("BUILD_STATIC_LIB", "ON")
+        .define("BUILD_SHARED_LIB", "OFF")
+        .build();
 
-            "thirdparty/GameNetworkingSockets/src/common/steamid.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/steamnetworkingsockets_certs.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/steamnetworkingsockets_certstore.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/steamnetworkingsockets_shared.cpp",
-            "thirdparty/GameNetworkingSockets/src/tier0/dbg.cpp",
-            "thirdparty/GameNetworkingSockets/src/tier0/platformtime.cpp",
-            "thirdparty/GameNetworkingSockets/src/tier1/netadr.cpp",
-            "thirdparty/GameNetworkingSockets/src/tier1/utlbuffer.cpp",
-            "thirdparty/GameNetworkingSockets/src/tier1/utlmemory.cpp",
-            "thirdparty/GameNetworkingSockets/src/tier1/ipv6text.c",
-            "thirdparty/GameNetworkingSockets/src/vstdlib/strtools.cpp",
-
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/steamnetworkingsockets_stats.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/steamnetworkingsockets_thinker.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/clientlib/csteamnetworkingsockets.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/clientlib/csteamnetworkingmessages.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/clientlib/steamnetworkingsockets_flat.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/clientlib/steamnetworkingsockets_connections.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/clientlib/steamnetworkingsockets_lowlevel.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/clientlib/steamnetworkingsockets_p2p.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/clientlib/steamnetworkingsockets_stun.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/clientlib/steamnetworkingsockets_p2p_ice.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/clientlib/steamnetworkingsockets_snp.cpp",
-	          "thirdparty/GameNetworkingSockets/src/steamnetworkingsockets/clientlib/steamnetworkingsockets_udp.cpp",
-
-        ])
-        .compiler("clang++")
-        .flag("-std=c++20")
-        .flag("-fvisibility=hidden")
-        .flag("-fno-strict-aliasing")
-        .flag("-Wall")
-        .flag("-Wno-unknown-pragmas")
-        .flag("-Wno-sign-compare")
-        .flag("-Wno-unused-local-typedef")
-        .flag("-Wno-unused-const-variable")
-        .flag("-Wno-unused-parameter")
-        .flag("-Wno-nested-anon-types")
-        .flag("-O")
-        .static_flag(true)
-        .compile("GameNetworkingSockets");
+    println!("cargo:rustc-link-search=native={}", dst.join("lib").display());
+    // The static library is suffixed with _s
+    println!("cargo:rustc-link-lib=static=GameNetworkingSockets_s");
 }
