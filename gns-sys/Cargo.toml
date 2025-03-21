@@ -14,4 +14,4 @@ crate-type = ["rlib", "staticlib"]
 
 [build-dependencies]
 bindgen = "0.70"
-cmake = { version = "0.1" }
+cmake = "0.1"
