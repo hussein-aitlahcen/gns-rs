@@ -2,7 +2,7 @@ use gns::sys::*;
 use gns::*;
 use std::{
     collections::HashMap,
-    net::Ipv6Addr,
+    net::Ipv4Addr,
     sync::mpsc::{self, Receiver},
     time::{Duration, Instant},
 };
@@ -40,7 +40,7 @@ fn server(port: u16) {
     let server = GnsSocket::new(&gns_global, &gns_utils)
         // **unwrap** must be banned in production.
         .unwrap()
-        .listen(Ipv6Addr::LOCALHOST.into(), port)
+        .listen(Ipv4Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
 
@@ -190,7 +190,7 @@ fn client(port: u16) {
     let client = GnsSocket::new(&gns_global, &gns_utils)
         // **unwrap** must be banned in production.
         .unwrap()
-        .connect(Ipv6Addr::LOCALHOST.into(), port)
+        .connect(Ipv4Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
 
