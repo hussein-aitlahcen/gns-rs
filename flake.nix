@@ -22,7 +22,7 @@
         };
       in rec {
         devShell = mkShell {
-          buildInputs = [ rust-nightly clang_15 openssl protobuf abseil-cpp_202401 pkg-config  ];
+          buildInputs = [ cmake rust-nightly clang_15 openssl protobuf abseil-cpp_202401 pkg-config  ];
           PROTOC = "${protobuf}/bin/protoc";
           LIBCLANG_PATH = "${llvmPackages_15.libclang.lib}/lib";
           LD_LIBRARY_PATH =
