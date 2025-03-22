@@ -3,23 +3,46 @@ use std::{
     path::PathBuf,
 };
 
+// Copied from 'cc'; https://docs.rs/cc/latest/src/cc/lib.rs.html#3073
+fn get_stdlib_name() -> Option<&'static str> {
+    if cfg!(target_os = "windows") && cfg!(target_env = "msvc") {
+        None
+    } else if cfg!(target_vendor = "apple")
+        || cfg!(target_os = "freebsd")
+        || cfg!(target_os = "openbsd")
+        || cfg!(target_os = "aix")
+        || (cfg!(target_os = "linux") && cfg!(target_env = "ohos"))
+        || cfg!(target_os = "wasi")
+    {
+        Some("c++")
+    } else if cfg!(target_os = "android") {
+        Some("c++_shared")
+    } else {
+        Some("stdc++")
+    }
+}
+
 fn main() {
-    if cfg!(target_os = "windows") {
-        // These libraries are prefixed with "lib" on Windows
+    if cfg!(target_os = "windows") && cfg!(target_env = "msvc") {
+        // MSVC linker doesn't search for both with and without "lib" prefix, so these have to be
+        // explicitly declared.
         println!("cargo:rustc-link-lib=libprotobuf");
         println!("cargo:rustc-link-lib=libcrypto");
         println!("cargo:rustc-link-lib=libssl");
+
+        println!("cargo:rustc-link-lib=abseil_dll");
     } else {
         println!("cargo:rustc-link-lib=protobuf");
         println!("cargo:rustc-link-lib=crypto");
         println!("cargo:rustc-link-lib=ssl");
-    }
 
-    if cfg!(target_os = "windows") && cfg!(target_env = "msvc") {
-        println!("cargo:rustc-link-lib=abseil_dll");
-    } else {
         println!("cargo:rustc-link-lib=absl_log_internal_check_op");
         println!("cargo:rustc-link-lib=absl_log_internal_message");
+    }
+
+    if let Some(stdlib) = get_stdlib_name() {
+        // The 'cc' crate used to do this for us, but 'cmake' doesn't...
+        println!("cargo:rustc-link-lib={stdlib}")
     }
 
     let bindings = bindgen::Builder::default()
@@ -67,7 +90,9 @@ fn main() {
         .define("BUILD_SHARED_LIB", "OFF")
         .build();
 
+    // Could be in lib or lib64
     println!("cargo:rustc-link-search=native={}", dst.join("lib").display());
+    println!("cargo:rustc-link-search=native={}", dst.join("lib64").display());
     // The static library is suffixed with _s
     println!("cargo:rustc-link-lib=static=GameNetworkingSockets_s");
 }
