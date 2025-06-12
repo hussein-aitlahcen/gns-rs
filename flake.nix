@@ -15,19 +15,26 @@
           inherit system;
           overlays = [ rust-overlay.overlays.default ];
         };
-      in with pkgs;
+      in
       let
-        rust-nightly = rust-bin.nightly.latest.default.override {
+        rust-nightly = pkgs.rust-bin.nightly.latest.default.override {
           extensions = [ "rust-src" "rust-analyzer" ];
+          targets = [ "x86_64-unknown-linux-musl" ];
         };
       in rec {
-        devShell = mkShell {
-          buildInputs = [ rust-nightly clang_15 openssl protobuf abseil-cpp_202401 pkg-config  ];
-          PROTOC = "${protobuf}/bin/protoc";
-          LIBCLANG_PATH = "${llvmPackages_15.libclang.lib}/lib";
-          LD_LIBRARY_PATH =
-            lib.makeLibraryPath [ clang15Stdenv.cc.cc.lib openssl protobuf abseil-cpp_202401 ];
-          CPLUS_INCLUDE_PATH = "${openssl.dev}/include";
+        devShell = pkgs.mkShell {
+          buildInputs = [
+            rust-nightly
+            pkgs.cmake
+            pkgs.clang_19
+            pkgs.pkgsStatic.openssl
+            pkgs.pkgsStatic.protobuf
+            pkgs.pkgsStatic.abseil-cpp_202407
+            pkgs.pkg-config
+          ];
+          PROTOC = "${pkgs.pkgsStatic.protobuf}/bin/protoc";
+          LIBCLANG_PATH = "${pkgs.llvmPackages_19.libclang.lib}/lib";
+          RUSTFLAGS = "-L${pkgs.pkgsStatic.openssl.out}/lib -L${pkgs.pkgsStatic.protobuf}/lib -L${pkgs.pkgsStatic.abseil-cpp_202407}/lib";
         };
       });
 }
