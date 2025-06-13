@@ -155,7 +155,7 @@ fn main() {
 
     c.static_crt(false);
     c.define("BUILD_STATIC_LIB", "ON");
-    c.define("BUILD_SHATED_LIB", "OFF");
+    c.define("BUILD_SHARED_LIB", "OFF");
     c.define("OPENSSL_USE_STATIC_LIB", "ON");
     c.define("Protobuf_USE_STATIC_LIBS", "ON");
     c.build();
