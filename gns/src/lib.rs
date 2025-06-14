@@ -55,7 +55,7 @@ pub use gns_sys as sys;
 use std::{
     ffi::{c_void, CStr, CString},
     marker::PhantomData,
-    mem::{forget, MaybeUninit},
+    mem::{ManuallyDrop, MaybeUninit},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     sync::{atomic::AtomicBool, Arc, Weak},
     time::Duration,
@@ -796,14 +796,19 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
     unsafe extern "C" fn on_connection_state_changed(
         info: &SteamNetConnectionStatusChangedCallback_t,
     ) {
-        // Attempt to upgrade the weak pointer. It may have been freed if the C
-        // event is yield after the Rust socket (client/server) is freed.
-        let weak = Weak::from_raw(info.m_info.m_nUserData as *const SegQueue<GnsConnectionEvent>);
-        weak.upgrade()
-            .map(|queue| queue.push(GnsConnectionEvent(*info)));
-        // We only temporarily hold the weak pointer to push the event. Make
-        // sure we avoid dropping the reference.
-        forget(weak);
+        if info.m_info.m_nUserData != 0 {
+            let weak = ManuallyDrop::new(Weak::from_raw(info.m_info.m_nUserData as *const SegQueue<GnsConnectionEvent>));
+            // Attempt to upgrade the weak pointer. It may have been freed if the C
+            // event is yield after the Rust socket (client/server) is freed.
+            match weak.upgrade() {
+                Some(queue) => queue.push(GnsConnectionEvent(*info)),
+                None => {
+                    // The pointer has been freed, cleanup the weak ref and update the user data.
+                    SteamAPI_ISteamNetworkingSockets_SetConnectionUserData(SteamAPI_SteamNetworkingSockets_v009(), info.m_hConn, 0);
+                    let _ = ManuallyDrop::into_inner(weak);
+                },
+            }
+        }
     }
 
     /// Initialize a new socket in [`IsCreated`] state.
