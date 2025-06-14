@@ -38,8 +38,6 @@ fn server(port: u16) {
     // For the server, the listen socket + poll group are closed/cleaned up.
     // For the client, the connection is closed.
     let server = GnsSocket::new(&gns_global, &gns_utils)
-        // **unwrap** must be banned in production.
-        .unwrap()
         .listen(Ipv4Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
@@ -188,8 +186,6 @@ fn client(port: u16) {
     let gns_utils = GnsUtils::new().unwrap();
 
     let client = GnsSocket::new(&gns_global, &gns_utils)
-        // **unwrap** must be banned in production.
-        .unwrap()
         .connect(Ipv4Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
