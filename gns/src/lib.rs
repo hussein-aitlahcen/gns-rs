@@ -956,12 +956,6 @@ pub enum GnsConfig<'a> {
 
 pub struct GnsUtils(*mut ISteamNetworkingUtils);
 
-impl Drop for GnsUtils {
-    fn drop(&mut self) {
-        unsafe { ISteamNetworkingUtils_ISteamNetworkingUtils_destructor(self.0) }
-    }
-}
-
 type MsgPtr = *const ::std::os::raw::c_char;
 
 impl GnsUtils {
