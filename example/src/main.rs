@@ -17,7 +17,7 @@ fn server(port: u16) {
     
     // Setup debugging to log everything.
     // The current rust implementation flush the log in stdout.
-    server.utils().enable_debug_output(
+    gns_global.utils().enable_debug_output(
         ESteamNetworkingSocketsDebugOutputType::k_ESteamNetworkingSocketsDebugOutputType_Everything,
         |ty, message| println!("{:#?}: {}", ty, message),
     );
@@ -185,7 +185,7 @@ fn client(port: u16) {
         |ty, message| println!("{:#?}: {}", ty, message),
     );
 
-    let client = GnsSocket::new(&gns_global, &gns_utils)
+    let client = GnsSocket::new(&gns_global)
         .connect(Ipv4Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
@@ -238,7 +238,7 @@ fn client(port: u16) {
             if input == "quit" {
                 break 'a;
             }
-            client.send_messages(vec![client.utils().allocate_message(
+            client.send_messages(vec![gns_global.utils().allocate_message(
                 client.connection(),
                 k_nSteamNetworkingSend_Reliable,
                 input.as_bytes(),
