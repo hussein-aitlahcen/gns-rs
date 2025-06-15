@@ -12,7 +12,6 @@
 //!
 //! // Initial the global networking state. Note that this instance must be unique per-process.
 //! let gns_global = GnsGlobal::get().unwrap();
-//! let gns_utils = GnsUtils::new().unwrap();
 //!
 //! // Create a new [`GnsSocket`], the index type [`IsCreated`] is used to determine the state of the socket.
 //! // The [`GnsSocket::new`] function is only available for the [`IsCreated`] state. This is the initial state of the socket.
@@ -48,6 +47,10 @@
 //!   std::thread::sleep(Duration::from_millis(10))
 //! }
 //! ```
+//!
+//! # Note
+//!
+//! Every instance of of [`GnsSocket`] has a dangling [`Weak<SegQueue<GnsConnectionEvent>>`] pointer associated due to how polling works. Polling is done globally and may buffer events for already destructed [`GnsSocket`]. We use a weak pointer as user data on client/server connections to push events on [`GnsGlobal::poll_callbacks`], see the `queue` field of [`IsClient`] and [`IsServer`]. For simplicity (we may fix this later), every [`GnsSocket`] has it's own queue and we accept this pretty small memory leak. If you only ever create one instance for the lifetime of your application, this will have no effect.
 
 use crossbeam_queue::SegQueue;
 use either::Either;
@@ -61,6 +64,14 @@ use std::{
     time::Duration,
 };
 use sys::*;
+
+fn get_interface() -> *mut ISteamNetworkingSockets {
+    unsafe { SteamAPI_SteamNetworkingSockets_v009() }
+}
+
+fn get_utils() -> *mut ISteamNetworkingUtils {
+    unsafe { SteamAPI_SteamNetworkingUtils_v003() }
+}
 
 /// A network message number. Simple alias for documentation.
 pub type GnsMessageNumber = u64;
@@ -102,7 +113,7 @@ static GNS_INIT: AtomicBool = AtomicBool::new(false);
 /// This is an empty type used to wrap the initialization/destruction of the low-level *GameNetworkingSockets*.
 /// On construction
 pub struct GnsGlobal {
-    socket: *mut ISteamNetworkingSockets,
+    utils: GnsUtils,
 }
 
 impl Drop for GnsGlobal {
@@ -140,11 +151,9 @@ impl GnsGlobal {
                     CStr::from_ptr(error.as_ptr()).to_str().unwrap_or("")
                 ))
             } else {
-                let socket = SteamAPI_SteamNetworkingSockets_v009();
-                if socket.is_null() {
-                    panic!("global SteamNetworkingSockets cannot be null")
-                }
-                Ok(GnsGlobal { socket })
+                Ok(GnsGlobal {
+                    utils: GnsUtils(()),
+                })
             }
         }
     }
@@ -152,14 +161,13 @@ impl GnsGlobal {
     #[inline]
     pub fn poll_callbacks(&self) {
         unsafe {
-            SteamAPI_ISteamNetworkingSockets_RunCallbacks(self.socket);
+            SteamAPI_ISteamNetworkingSockets_RunCallbacks(get_interface());
         }
     }
-}
 
-/// Simple trait used to allow for a [`GnsSocket`] state to drop itself using the parent structure `socket`.
-pub trait GnsDroppable: Sized {
-    fn drop(&self, socket: &GnsSocket<Self>);
+    pub fn utils(&self) -> &GnsUtils {
+        &self.utils
+    }
 }
 
 /// Opaque wrapper around the low-level [`sys::HSteamListenSocket`].
@@ -175,22 +183,14 @@ pub struct GnsPollGroup(HSteamNetPollGroup);
 /// Consequently, the state is empty.
 pub struct IsCreated;
 
-impl GnsDroppable for IsCreated {
-    fn drop(&self, _: &GnsSocket<Self>) {}
-}
-
 /// Common functions available for any [`GnsSocket`] state that is implementing it.
 /// Regardless of being a client or server, a ready socket will allow us to query for connection events as well as receive messages.
-pub trait IsReady: GnsDroppable {
+pub trait IsReady {
     /// Return a reference to the connection event queue. The queue is thread-safe.
     fn queue(&self) -> &SegQueue<GnsConnectionEvent>;
     /// Poll for incoming messages. K represent the maximum number of messages we are willing to receive.
     /// Return the actual number of messsages that has been received.
-    fn receive<const K: usize>(
-        &self,
-        gns: &GnsSocket<Self>,
-        messages: &mut [GnsNetworkMessage<ToReceive>; K],
-    ) -> usize;
+    fn receive<const K: usize>(&self, messages: &mut [GnsNetworkMessage<ToReceive>; K]) -> usize;
 }
 
 /// State of a [`GnsSocket`] that has been determined to be a server, usually via the [`GnsSocket::listen`] call.
@@ -207,14 +207,14 @@ pub struct IsServer {
     poll_group: GnsPollGroup,
 }
 
-impl GnsDroppable for IsServer {
-    fn drop(&self, gns: &GnsSocket<Self>) {
+impl Drop for IsServer {
+    fn drop(&mut self) {
         unsafe {
             SteamAPI_ISteamNetworkingSockets_CloseListenSocket(
-                gns.global.socket,
+                get_interface(),
                 self.listen_socket.0,
             );
-            SteamAPI_ISteamNetworkingSockets_DestroyPollGroup(gns.global.socket, self.poll_group.0);
+            SteamAPI_ISteamNetworkingSockets_DestroyPollGroup(get_interface(), self.poll_group.0);
         }
     }
 }
@@ -226,14 +226,10 @@ impl IsReady for IsServer {
     }
 
     #[inline]
-    fn receive<const K: usize>(
-        &self,
-        gns: &GnsSocket<Self>,
-        messages: &mut [GnsNetworkMessage<ToReceive>; K],
-    ) -> usize {
+    fn receive<const K: usize>(&self, messages: &mut [GnsNetworkMessage<ToReceive>; K]) -> usize {
         unsafe {
             SteamAPI_ISteamNetworkingSockets_ReceiveMessagesOnPollGroup(
-                gns.global.socket,
+                get_interface(),
                 self.poll_group.0,
                 messages.as_mut_ptr() as _,
                 K as _,
@@ -251,11 +247,11 @@ pub struct IsClient {
     connection: GnsConnection,
 }
 
-impl GnsDroppable for IsClient {
-    fn drop(&self, gns: &GnsSocket<Self>) {
+impl Drop for IsClient {
+    fn drop(&mut self) {
         unsafe {
             SteamAPI_ISteamNetworkingSockets_CloseConnection(
-                gns.global.socket,
+                get_interface(),
                 self.connection.0,
                 0,
                 core::ptr::null(),
@@ -272,14 +268,10 @@ impl IsReady for IsClient {
     }
 
     #[inline]
-    fn receive<const K: usize>(
-        &self,
-        gns: &GnsSocket<Self>,
-        messages: &mut [GnsNetworkMessage<ToReceive>; K],
-    ) -> usize {
+    fn receive<const K: usize>(&self, messages: &mut [GnsNetworkMessage<ToReceive>; K]) -> usize {
         unsafe {
             SteamAPI_ISteamNetworkingSockets_ReceiveMessagesOnConnection(
-                gns.global.socket,
+                get_interface(),
                 self.connection.0,
                 messages.as_mut_ptr() as _,
                 K as _,
@@ -593,40 +585,22 @@ impl GnsConnectionEvent {
 
 /// [`GnsSocket`] is the most important structure of this library.
 /// This structure is used to create client ([`GnsSocket<IsClient>`]) and server ([`GnsSocket<IsServer>`]) sockets via the [`GnsSocket::connect`] and [`GnsSocket::listen`] functions.
-/// The drop implementation make sure that everything related to this structure is correctly freed, except the [`GnsGlobal`] and [`GnsUtils`] instances and the user has a strong guarantee that all the available operations over the socket are **safe**.
-pub struct GnsSocket<'x, 'y, S: GnsDroppable> {
+/// The drop implementation make sure that everything related to this structure is correctly freed, except the [`GnsGlobal`] instance and the user has a strong guarantee that all the available operations over the socket are **safe**.
+pub struct GnsSocket<'x, S> {
     global: &'x GnsGlobal,
-    utils: &'y GnsUtils,
     state: S,
 }
 
-impl<'x, 'y, S> Drop for GnsSocket<'x, 'y, S>
-where
-    S: GnsDroppable,
-{
-    fn drop(&mut self) {
-        self.state.drop(&self);
-    }
-}
-
-impl<'x, 'y, S> GnsSocket<'x, 'y, S>
-where
-    S: GnsDroppable,
-{
+impl<'x, S> GnsSocket<'x, S> {
     #[inline]
     pub fn global(&self) -> &GnsGlobal {
         self.global
     }
-
-    #[inline]
-    pub fn utils(&self) -> &GnsUtils {
-        self.utils
-    }
 }
 
-impl<'x, 'y, S> GnsSocket<'x, 'y, S>
+impl<'x, S> GnsSocket<'x, S>
 where
-    S: GnsDroppable + IsReady,
+    S: IsReady,
 {
     /// Poll callbacks, allowing the low-level library to yield connection events.
     #[inline]
@@ -650,7 +624,7 @@ where
         let mut status: GnsConnectionRealTimeStatus = Default::default();
         GnsError(unsafe {
             SteamAPI_ISteamNetworkingSockets_GetConnectionRealTimeStatus(
-                self.global.socket,
+                get_interface(),
                 conn,
                 &mut status as *mut GnsConnectionRealTimeStatus
                     as *mut SteamNetConnectionRealTimeStatus_t,
@@ -670,7 +644,7 @@ where
     ) -> Option<GnsConnectionInfo> {
         let mut info: SteamNetConnectionInfo_t = Default::default();
         if unsafe {
-            SteamAPI_ISteamNetworkingSockets_GetConnectionInfo(self.global.socket, conn, &mut info)
+            SteamAPI_ISteamNetworkingSockets_GetConnectionInfo(get_interface(), conn, &mut info)
         } {
             Some(GnsConnectionInfo(info))
         } else {
@@ -684,7 +658,7 @@ where
         GnsConnection(conn): GnsConnection,
     ) -> GnsResult<()> {
         GnsError(unsafe {
-            SteamAPI_ISteamNetworkingSockets_FlushMessagesOnConnection(self.global.socket, conn)
+            SteamAPI_ISteamNetworkingSockets_FlushMessagesOnConnection(get_interface(), conn)
         })
         .into_result()
     }
@@ -700,7 +674,7 @@ where
         let debug_c = CString::new(debug).expect("str; qed;");
         unsafe {
             SteamAPI_ISteamNetworkingSockets_CloseConnection(
-                self.global.socket,
+                get_interface(),
                 conn,
                 reason as _,
                 debug_c.as_ptr(),
@@ -717,7 +691,7 @@ where
         // Do not implements default for networking messages as they must be allocated by the lib.
         let mut messages: [GnsNetworkMessage<ToReceive>; K] =
             unsafe { MaybeUninit::zeroed().assume_init() };
-        let nb_of_messages = self.state.receive(&self, &mut messages);
+        let nb_of_messages = self.state.receive(&mut messages);
         if nb_of_messages == usize::MAX {
             None
         } else {
@@ -753,7 +727,7 @@ where
         let (priorities, weights): (Vec<_>, Vec<_>) = lanes.iter().copied().unzip();
         GnsError(unsafe {
             SteamAPI_ISteamNetworkingSockets_ConfigureConnectionLanes(
-                self.global.socket,
+                get_interface(),
                 connection,
                 lanes.len() as _,
                 priorities.as_ptr() as *const u32 as *const i32,
@@ -771,7 +745,7 @@ where
         let mut result = vec![0i64; messages.len()];
         unsafe {
             SteamAPI_ISteamNetworkingSockets_SendMessages(
-                self.global.socket,
+                get_interface(),
                 messages.len() as _,
                 messages.as_ptr() as *const _,
                 result.as_mut_ptr(),
@@ -790,33 +764,29 @@ where
     }
 }
 
-impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
+impl<'x> GnsSocket<'x, IsCreated> {
     /// Unsafe, C-like callback, we use the user data to pass the thread-safe event queue pointer.
     /// The library ensure that the queue is pinned in memory and valid for the lifetime of the socket using this callback.
     unsafe extern "C" fn on_connection_state_changed(
-        info: &SteamNetConnectionStatusChangedCallback_t,
+        info: &mut SteamNetConnectionStatusChangedCallback_t,
     ) {
-        if info.m_info.m_nUserData != 0 {
-            let weak = ManuallyDrop::new(Weak::from_raw(info.m_info.m_nUserData as *const SegQueue<GnsConnectionEvent>));
-            // Attempt to upgrade the weak pointer. It may have been freed if the C
-            // event is yield after the Rust socket (client/server) is freed.
-            match weak.upgrade() {
-                Some(queue) => queue.push(GnsConnectionEvent(*info)),
-                None => {
-                    // The pointer has been freed, cleanup the weak ref and update the user data.
-                    SteamAPI_ISteamNetworkingSockets_SetConnectionUserData(SteamAPI_SteamNetworkingSockets_v009(), info.m_hConn, 0);
-                    let _ = ManuallyDrop::into_inner(weak);
-                },
-            }
+        // Do not allow the weak pointer to be dropped as it may be reused in
+        // subsequent calls from gns.
+        let weak = ManuallyDrop::new(Weak::<SegQueue<GnsConnectionEvent>>::from_raw(
+            info.m_info.m_nUserData as _,
+        ));
+        // Attempt to upgrade the weak pointer. It may have been freed if the C
+        // event is yield after the Rust socket (client/server) is freed.
+        if let Some(queue) = weak.upgrade() {
+            queue.push(GnsConnectionEvent(*info));
         }
     }
 
     /// Initialize a new socket in [`IsCreated`] state.
     #[inline]
-    pub fn new(global: &'x GnsGlobal, utils: &'y GnsUtils) -> Self {
+    pub fn new(global: &'x GnsGlobal) -> Self {
         GnsSocket {
             global,
-            utils,
             state: IsCreated,
         }
     }
@@ -827,7 +797,7 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
         port: u16,
         queue: &Arc<SegQueue<GnsConnectionEvent>>,
     ) -> (SteamNetworkingIPAddr, [SteamNetworkingConfigValue_t; 2]) {
-        let queue = Arc::downgrade(queue);
+        let queue_ref = Arc::downgrade(queue);
         let addr = SteamNetworkingIPAddr {
             __bindgen_anon_1: match address {
                 IpAddr::V4(address) => SteamNetworkingIPAddr__bindgen_ty_2 {
@@ -854,7 +824,7 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
             m_eDataType: ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Int64,
             m_eValue: ESteamNetworkingConfigValue::k_ESteamNetworkingConfig_ConnectionUserData,
             m_val: SteamNetworkingConfigValue_t__bindgen_ty_1 {
-              m_int64: queue.into_raw() as *const _ as i64
+              m_int64: queue_ref.into_raw() as *const _ as i64
             }
         }];
         (addr, options)
@@ -862,12 +832,12 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
 
     /// Listen for incoming connections, the socket transition from [`IsCreated`] to [`IsServer`], allowing a new set of server operations.
     #[inline]
-    pub fn listen(self, address: IpAddr, port: u16) -> Result<GnsSocket<'x, 'y, IsServer>, ()> {
+    pub fn listen(self, address: IpAddr, port: u16) -> Result<GnsSocket<'x, IsServer>, ()> {
         let queue = Arc::new(SegQueue::new());
         let (addr, options) = Self::setup_common(address, port, &queue);
         let listen_socket = unsafe {
             SteamAPI_ISteamNetworkingSockets_CreateListenSocketIP(
-                self.global.socket,
+                get_interface(),
                 &addr,
                 options.len() as _,
                 options.as_ptr(),
@@ -877,13 +847,12 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
             Err(())
         } else {
             let poll_group =
-                unsafe { SteamAPI_ISteamNetworkingSockets_CreatePollGroup(self.global.socket) };
+                unsafe { SteamAPI_ISteamNetworkingSockets_CreatePollGroup(get_interface()) };
             if poll_group == k_HSteamNetPollGroup_Invalid {
                 Err(())
             } else {
                 Ok(GnsSocket {
                     global: self.global,
-                    utils: self.utils,
                     state: IsServer {
                         queue,
                         listen_socket: GnsListenSocket(listen_socket),
@@ -896,12 +865,12 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
 
     /// Connect to a remote host, the socket transition from [`IsCreated`] to [`IsClient`], allowing a new set of client operations.
     #[inline]
-    pub fn connect(self, address: IpAddr, port: u16) -> Result<GnsSocket<'x, 'y, IsClient>, ()> {
+    pub fn connect(self, address: IpAddr, port: u16) -> Result<GnsSocket<'x, IsClient>, ()> {
         let queue = Arc::new(SegQueue::new());
         let (addr, options) = Self::setup_common(address, port, &queue);
         let connection = unsafe {
             SteamAPI_ISteamNetworkingSockets_ConnectByIPAddress(
-                self.global.socket,
+                get_interface(),
                 &addr,
                 options.len() as _,
                 options.as_ptr(),
@@ -912,7 +881,6 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
         } else {
             Ok(GnsSocket {
                 global: self.global,
-                utils: self.utils,
                 state: IsClient {
                     queue,
                     connection: GnsConnection(connection),
@@ -922,17 +890,17 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsCreated> {
     }
 }
 
-impl<'x, 'y> GnsSocket<'x, 'y, IsServer> {
+impl<'x> GnsSocket<'x, IsServer> {
     /// Accept an incoming connection. This operation is available only if the socket is in the [`IsServer`] state.
     #[inline]
     pub fn accept(&self, connection: GnsConnection) -> GnsResult<()> {
         GnsError(unsafe {
-            SteamAPI_ISteamNetworkingSockets_AcceptConnection(self.global.socket, connection.0)
+            SteamAPI_ISteamNetworkingSockets_AcceptConnection(get_interface(), connection.0)
         })
         .into_result()?;
         if !unsafe {
             SteamAPI_ISteamNetworkingSockets_SetConnectionPollGroup(
-                self.global.socket,
+                get_interface(),
                 connection.0,
                 self.state.poll_group.0,
             )
@@ -943,7 +911,7 @@ impl<'x, 'y> GnsSocket<'x, 'y, IsServer> {
     }
 }
 
-impl<'x, 'y> GnsSocket<'x, 'y, IsClient> {
+impl<'x> GnsSocket<'x, IsClient> {
     /// Return the socket connection. This operation is available only if the socket is in the [`IsClient`] state.
     #[inline]
     pub fn connection(&self) -> GnsConnection {
@@ -959,21 +927,11 @@ pub enum GnsConfig<'a> {
     Ptr(*mut c_void),
 }
 
-pub struct GnsUtils(*mut ISteamNetworkingUtils);
+pub struct GnsUtils(());
 
 type MsgPtr = *const ::std::os::raw::c_char;
 
 impl GnsUtils {
-    #[inline]
-    pub fn new() -> Option<Self> {
-        let ptr = unsafe { SteamAPI_SteamNetworkingUtils_v003() };
-        if ptr.is_null() {
-            None
-        } else {
-            Some(GnsUtils(ptr))
-        }
-    }
-
     #[inline]
     pub fn enable_debug_output(
         &self,
@@ -988,7 +946,7 @@ impl GnsUtils {
             F.unwrap()(ty, CStr::from_ptr(msg).to_string_lossy().to_string());
         }
         unsafe {
-            SteamAPI_ISteamNetworkingUtils_SetDebugOutputFunction(self.0, ty, Some(debug));
+            SteamAPI_ISteamNetworkingUtils_SetDebugOutputFunction(get_utils(), ty, Some(debug));
         }
     }
 
@@ -1001,8 +959,9 @@ impl GnsUtils {
         flags: i32,
         payload: &[u8],
     ) -> GnsNetworkMessage<ToSend> {
-        let message_ptr =
-            unsafe { SteamAPI_ISteamNetworkingUtils_AllocateMessage(self.0, payload.len() as _) };
+        let message_ptr = unsafe {
+            SteamAPI_ISteamNetworkingUtils_AllocateMessage(get_utils(), payload.len() as _)
+        };
         GnsNetworkMessage::new(message_ptr, conn, flags, payload)
     }
 
@@ -1015,20 +974,20 @@ impl GnsUtils {
     ) -> Result<(), ()> {
         let result = match value {
             GnsConfig::Float(x) => unsafe {
-                SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValueFloat(self.0, typ, x)
+                SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValueFloat(get_utils(), typ, x)
             },
             GnsConfig::Int32(x) => unsafe {
-                SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValueInt32(self.0, typ, x as i32)
+                SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValueInt32(get_utils(), typ, x as i32)
             },
             GnsConfig::String(x) => unsafe {
                 SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValueString(
-                    self.0,
+                    get_utils(),
                     typ,
                     CString::new(x).expect("str; qed;").as_c_str().as_ptr(),
                 )
             },
             GnsConfig::Ptr(x) => unsafe {
-                SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValuePtr(self.0, typ, x)
+                SteamAPI_ISteamNetworkingUtils_SetGlobalConfigValuePtr(get_utils(), typ, x)
             },
         };
         if result {
@@ -1036,10 +995,5 @@ impl GnsUtils {
         } else {
             Err(())
         }
-    }
-
-    #[inline]
-    pub unsafe fn into_inner(self) -> *mut ISteamNetworkingUtils {
-        self.0
     }
 }

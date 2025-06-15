@@ -14,13 +14,18 @@ fn server(port: u16) {
     // Dropping/recreating the instance is allowed though.
     // **unwrap** must be banned in production.
     let gns_global = GnsGlobal::get().unwrap();
-
-    // **unwrap** must be banned in production.
-    let gns_utils = GnsUtils::new().unwrap();
+    
+    // Setup debugging to log everything.
+    // The current rust implementation flush the log in stdout.
+    gns_global.utils().enable_debug_output(
+        ESteamNetworkingSocketsDebugOutputType::k_ESteamNetworkingSocketsDebugOutputType_Everything,
+        |ty, message| println!("{:#?}: {}", ty, message),
+    );
 
     // Add fake 1000ms ping to everyone connecting.
     // **unwrap** must be banned in production.
-    gns_utils
+    gns_global
+        .utils()
         .set_global_config_value(
             ESteamNetworkingConfigValue::k_ESteamNetworkingConfig_FakePacketLag_Recv,
             GnsConfig::Int32(1000),
@@ -37,17 +42,10 @@ fn server(port: u16) {
     // Note that GnsSocket implement drop for both server/client.
     // For the server, the listen socket + poll group are closed/cleaned up.
     // For the client, the connection is closed.
-    let server = GnsSocket::new(&gns_global, &gns_utils)
+    let server = GnsSocket::new(&gns_global)
         .listen(Ipv4Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
-
-    // Setup debugging to log everything.
-    // The current rust implementation flush the log in stdout.
-    server.utils().enable_debug_output(
-        ESteamNetworkingSocketsDebugOutputType::k_ESteamNetworkingSocketsDebugOutputType_Everything,
-        |ty, message| println!("{:#?}: {}", ty, message),
-    );
 
     let mut last_update = Instant::now();
     loop {
@@ -83,7 +81,7 @@ fn server(port: u16) {
                 .clone()
                 .into_iter()
                 .map(|client| {
-                    server.utils().allocate_message(
+                    gns_global.utils().allocate_message(
                         client,
                         k_nSteamNetworkingSend_Reliable,
                         format!("[{}]: {}", title, content).as_bytes(),
@@ -181,19 +179,16 @@ fn user_input() -> Receiver<String> {
 fn client(port: u16) {
     // **unwrap** must be banned in production.
     let gns_global = GnsGlobal::get().unwrap();
-
-    // **unwrap** must be banned in production.
-    let gns_utils = GnsUtils::new().unwrap();
-
-    let client = GnsSocket::new(&gns_global, &gns_utils)
-        .connect(Ipv4Addr::LOCALHOST.into(), port)
-        // **unwrap** must be banned in production.
-        .unwrap();
-
-    client.utils().enable_debug_output(
+    
+    gns_global.utils().enable_debug_output(
         ESteamNetworkingSocketsDebugOutputType::k_ESteamNetworkingSocketsDebugOutputType_Everything,
         |ty, message| println!("{:#?}: {}", ty, message),
     );
+
+    let client = GnsSocket::new(&gns_global)
+        .connect(Ipv4Addr::LOCALHOST.into(), port)
+        // **unwrap** must be banned in production.
+        .unwrap();
 
     let user_input_stream = user_input();
 
@@ -243,7 +238,7 @@ fn client(port: u16) {
             if input == "quit" {
                 break 'a;
             }
-            client.send_messages(vec![client.utils().allocate_message(
+            client.send_messages(vec![gns_global.utils().allocate_message(
                 client.connection(),
                 k_nSteamNetworkingSend_Reliable,
                 input.as_bytes(),
