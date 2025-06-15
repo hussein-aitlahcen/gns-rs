@@ -81,7 +81,7 @@ fn server(port: u16) {
                 .clone()
                 .into_iter()
                 .map(|client| {
-                    server.utils().allocate_message(
+                    gns_global.utils().allocate_message(
                         client,
                         k_nSteamNetworkingSend_Reliable,
                         format!("[{}]: {}", title, content).as_bytes(),
