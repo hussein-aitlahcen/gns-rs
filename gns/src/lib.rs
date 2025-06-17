@@ -8,6 +8,10 @@
 //! # Example
 //!
 //! ```
+//! use gns::{GnsGlobal, GnsSocket, IsCreated};
+//! use std::net::Ipv6Addr;
+//! use std::time::Duration;
+//!
 //! // **uwrap** must be banned in production, we use it here to extract the most relevant part of the library.
 //!
 //! // Initial the global networking state. Note that this instance must be unique per-process.
@@ -15,7 +19,10 @@
 //!
 //! // Create a new [`GnsSocket`], the index type [`IsCreated`] is used to determine the state of the socket.
 //! // The [`GnsSocket::new`] function is only available for the [`IsCreated`] state. This is the initial state of the socket.
-//! let gns_socket = GnsSocket::<IsCreated>::new().unwrap();
+//! let gns_socket = GnsSocket::<IsCreated>::new(gns_global.clone());
+//!
+//! // Choose your own port
+//! let port = 9001;
 //!
 //! // We now do a transition from [`IsCreated`] to the [`IsClient`] state. The [`GnsSocket::connect`] operation does this transition for us.
 //! // Since we are now using a client socket, we have access to a different set of operations.
@@ -30,17 +37,17 @@
 //!
 //! loop {
 //!   // Run the low-level callbacks.
-//!   client.poll_callbacks();
+//!   gns_global.poll_callbacks();
 //!
 //!   // Receive a maximum of 100 messages on the client connection.
 //!   // For each messages, print it's payload.
-//!   let _actual_nb_of_messages_processed = client.poll_messages::<100, _>(|message| {
-//!     println!(core::str::from_utf8(message.payload()).unwrap());
+//!   let _actual_nb_of_messages_processed = client.poll_messages::<100>(|message| {
+//!     println!("{}", core::str::from_utf8(message.payload()).unwrap());
 //!   });
 //!
 //!   // Don't do anything with events.
 //!   // One would check the event for connection status, i.e. doing something when we are connected/disconnected from the server.
-//!   let _actual_nb_of_events_processed = client.poll_event::<100, _>(|_| {
+//!   let _actual_nb_of_events_processed = client.poll_event::<100>(|_| {
 //!   });
 //!
 //!   // Sleep a little bit.
@@ -56,13 +63,15 @@ use crossbeam_queue::SegQueue;
 use either::Either;
 pub use gns_sys as sys;
 use std::{
+    collections::HashMap,
     ffi::{c_void, CStr, CString},
     marker::PhantomData,
-    mem::{ManuallyDrop, MaybeUninit},
+    mem::MaybeUninit,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    sync::{atomic::AtomicBool, Arc, Weak},
+    sync::{Arc, Mutex, Weak},
     time::Duration,
 };
+use std::sync::atomic::{AtomicI64, Ordering};
 use sys::*;
 
 fn get_interface() -> *mut ISteamNetworkingSockets {
@@ -107,53 +116,53 @@ impl From<GnsError> for GnsResult<()> {
     }
 }
 
-/// Global lock used to ensure that only one instance of [`GnsGlobal`] ever exists.
-static GNS_INIT: AtomicBool = AtomicBool::new(false);
-
-/// This is an empty type used to wrap the initialization/destruction of the low-level *GameNetworkingSockets*.
-/// On construction
+/// Wraps the initialization/destruction of the low-level *GameNetworkingSockets* and associated
+/// singletons.
+///
+/// A reference can be retrieved via [`GnsGlobal::get()`], which will initialize
+/// *GameNetworkingSockets* if it has not yet been initialized.
 pub struct GnsGlobal {
     utils: GnsUtils,
+    next_queue_id: AtomicI64,
+    event_queues: Mutex<HashMap<i64, Weak<SegQueue<GnsConnectionEvent>>>>,
 }
 
-impl Drop for GnsGlobal {
-    fn drop(&mut self) {
-        unsafe {
-            GameNetworkingSockets_Kill();
-        }
-        GNS_INIT.store(false, std::sync::atomic::Ordering::SeqCst)
-    }
-}
+static GNS_GLOBAL: Mutex<Option<Arc<GnsGlobal>>> = Mutex::new(None);
 
 impl GnsGlobal {
-    /// Try to acquire the [`GnsGlobal`] instance.
-    /// This function will succeed only if there is no instance already created.
-    /// The result might be dropped/recreated safely though.
-    ///
-    /// If successful, a call to [`sys::GameNetworkingSockets_Init`] has been made.
-    /// Note that the drop implementation ensure that [`sys::GameNetworkingSockets_Kill`] is called.
-    pub fn get() -> Result<Self, String> {
-        if GNS_INIT.compare_exchange(
-            false,
-            true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::SeqCst,
-        ) != Ok(false)
-        {
-            return Err("Only one handle of GnsGlobal must be held by a program. If the value is dropped, another handle might be created.".into());
-        }
-        unsafe {
-            let mut error: SteamDatagramErrMsg = MaybeUninit::zeroed().assume_init();
-            if !GameNetworkingSockets_Init(core::ptr::null(), &mut error) {
-                GNS_INIT.store(false, std::sync::atomic::Ordering::SeqCst);
-                Err(format!(
-                    "{}",
-                    CStr::from_ptr(error.as_ptr()).to_str().unwrap_or("")
-                ))
-            } else {
-                Ok(GnsGlobal {
-                    utils: GnsUtils(()),
-                })
+    /// Try to acquire a reference to the [`GnsGlobal`] instance.
+    /// 
+    /// If GnsGlobal has not yet been successfully initialized, a call to
+    /// [`sys::GameNetworkingSockets_Init`] will be made. If successful, a reference to GnsGlobal
+    /// will be returned.
+    /// 
+    /// If GnsGlobal has already been initialized, this method returns a reference to the already
+    /// created GnsGlobal instance.
+    /// 
+    /// # Errors
+    /// If a call to [`sys::GameNetworkingSockets_Init`] errors, that error will be propagated as a
+    /// String message.
+    pub fn get() -> Result<Arc<Self>, String> {
+        let mut lock = GNS_GLOBAL.lock().unwrap();
+        if let Some(gns_global) = lock.clone() {
+            Ok(gns_global)
+        } else {
+            unsafe {
+                let mut error: SteamDatagramErrMsg = MaybeUninit::zeroed().assume_init();
+                if !GameNetworkingSockets_Init(core::ptr::null(), &mut error) {
+                    Err(format!(
+                        "{}",
+                        CStr::from_ptr(error.as_ptr()).to_str().unwrap_or("")
+                    ))
+                } else {
+                    let gns_global = Arc::new(GnsGlobal {
+                        utils: GnsUtils(()),
+                        next_queue_id: AtomicI64::new(0),
+                        event_queues: Mutex::new(HashMap::new()),
+                    });
+                    *lock = Some(gns_global.clone());
+                    Ok(gns_global)
+                }
             }
         }
     }
@@ -167,6 +176,13 @@ impl GnsGlobal {
 
     pub fn utils(&self) -> &GnsUtils {
         &self.utils
+    }
+    
+    fn create_queue(&self) -> (i64, Arc<SegQueue<GnsConnectionEvent>>) {
+        let queue = Arc::new(SegQueue::new());
+        let queue_id = self.next_queue_id.fetch_add(1, Ordering::SeqCst);
+        self.event_queues.lock().unwrap().insert(queue_id, Arc::downgrade(&queue));
+        (queue_id, queue)
     }
 }
 
@@ -586,28 +602,15 @@ impl GnsConnectionEvent {
 /// [`GnsSocket`] is the most important structure of this library.
 /// This structure is used to create client ([`GnsSocket<IsClient>`]) and server ([`GnsSocket<IsServer>`]) sockets via the [`GnsSocket::connect`] and [`GnsSocket::listen`] functions.
 /// The drop implementation make sure that everything related to this structure is correctly freed, except the [`GnsGlobal`] instance and the user has a strong guarantee that all the available operations over the socket are **safe**.
-pub struct GnsSocket<'x, S> {
-    global: &'x GnsGlobal,
+pub struct GnsSocket<S> {
+    global: Arc<GnsGlobal>,
     state: S,
 }
 
-impl<'x, S> GnsSocket<'x, S> {
-    #[inline]
-    pub fn global(&self) -> &GnsGlobal {
-        self.global
-    }
-}
-
-impl<'x, S> GnsSocket<'x, S>
+impl<S> GnsSocket<S>
 where
     S: IsReady,
 {
-    /// Poll callbacks, allowing the low-level library to yield connection events.
-    #[inline]
-    pub fn poll_callbacks(&self) {
-        self.global.poll_callbacks();
-    }
-
     /// Get a connection lane status.
     /// This call is possible only if lanes has been previously configured using configure_connection_lanes
     #[inline]
@@ -764,27 +767,30 @@ where
     }
 }
 
-impl<'x> GnsSocket<'x, IsCreated> {
-    /// Unsafe, C-like callback, we use the user data to pass the thread-safe event queue pointer.
-    /// The library ensure that the queue is pinned in memory and valid for the lifetime of the socket using this callback.
+impl GnsSocket<IsCreated> {
+    /// Unsafe, C-like callback, we use the user data to pass the queue ID, so we can find the
+    /// correct queue in GnsGlobal.
     unsafe extern "C" fn on_connection_state_changed(
         info: &mut SteamNetConnectionStatusChangedCallback_t,
     ) {
-        // Do not allow the weak pointer to be dropped as it may be reused in
-        // subsequent calls from gns.
-        let weak = ManuallyDrop::new(Weak::<SegQueue<GnsConnectionEvent>>::from_raw(
-            info.m_info.m_nUserData as _,
-        ));
-        // Attempt to upgrade the weak pointer. It may have been freed if the C
-        // event is yield after the Rust socket (client/server) is freed.
-        if let Some(queue) = weak.upgrade() {
-            queue.push(GnsConnectionEvent(*info));
+        let gns_global = GnsGlobal::get()
+            // GnsGlobal needs to be initialized to even reach this point in the first place.
+            .expect("GnsGlobal should be initialized");
+        
+        let mut queues = gns_global.event_queues.lock().unwrap();
+        if let Some(queue) = queues.get(&info.m_info.m_nUserData).cloned() {
+            if let Some(queue) = queue.upgrade() {
+                queue.push(GnsConnectionEvent(*info));
+            } else {
+                // The queue is no longer valid as the associated GnsSocket has been dropped
+                queues.remove(&info.m_info.m_nUserData);
+            }
         }
     }
 
     /// Initialize a new socket in [`IsCreated`] state.
     #[inline]
-    pub fn new(global: &'x GnsGlobal) -> Self {
+    pub fn new(global: Arc<GnsGlobal>) -> Self {
         GnsSocket {
             global,
             state: IsCreated,
@@ -795,9 +801,8 @@ impl<'x> GnsSocket<'x, IsCreated> {
     fn setup_common(
         address: IpAddr,
         port: u16,
-        queue: &Arc<SegQueue<GnsConnectionEvent>>,
+        queue_id: int64,
     ) -> (SteamNetworkingIPAddr, [SteamNetworkingConfigValue_t; 2]) {
-        let queue_ref = Arc::downgrade(queue);
         let addr = SteamNetworkingIPAddr {
             __bindgen_anon_1: match address {
                 IpAddr::V4(address) => SteamNetworkingIPAddr__bindgen_ty_2 {
@@ -824,7 +829,7 @@ impl<'x> GnsSocket<'x, IsCreated> {
             m_eDataType: ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Int64,
             m_eValue: ESteamNetworkingConfigValue::k_ESteamNetworkingConfig_ConnectionUserData,
             m_val: SteamNetworkingConfigValue_t__bindgen_ty_1 {
-              m_int64: queue_ref.into_raw() as *const _ as i64
+              m_int64: queue_id
             }
         }];
         (addr, options)
@@ -832,9 +837,9 @@ impl<'x> GnsSocket<'x, IsCreated> {
 
     /// Listen for incoming connections, the socket transition from [`IsCreated`] to [`IsServer`], allowing a new set of server operations.
     #[inline]
-    pub fn listen(self, address: IpAddr, port: u16) -> Result<GnsSocket<'x, IsServer>, ()> {
-        let queue = Arc::new(SegQueue::new());
-        let (addr, options) = Self::setup_common(address, port, &queue);
+    pub fn listen(self, address: IpAddr, port: u16) -> Result<GnsSocket<IsServer>, ()> {
+        let (queue_id, queue) = self.global.create_queue();
+        let (addr, options) = Self::setup_common(address, port, queue_id);
         let listen_socket = unsafe {
             SteamAPI_ISteamNetworkingSockets_CreateListenSocketIP(
                 get_interface(),
@@ -865,9 +870,9 @@ impl<'x> GnsSocket<'x, IsCreated> {
 
     /// Connect to a remote host, the socket transition from [`IsCreated`] to [`IsClient`], allowing a new set of client operations.
     #[inline]
-    pub fn connect(self, address: IpAddr, port: u16) -> Result<GnsSocket<'x, IsClient>, ()> {
-        let queue = Arc::new(SegQueue::new());
-        let (addr, options) = Self::setup_common(address, port, &queue);
+    pub fn connect(self, address: IpAddr, port: u16) -> Result<GnsSocket<IsClient>, ()> {
+        let (queue_id, queue) = self.global.create_queue();
+        let (addr, options) = Self::setup_common(address, port, queue_id);
         let connection = unsafe {
             SteamAPI_ISteamNetworkingSockets_ConnectByIPAddress(
                 get_interface(),
@@ -890,7 +895,7 @@ impl<'x> GnsSocket<'x, IsCreated> {
     }
 }
 
-impl<'x> GnsSocket<'x, IsServer> {
+impl GnsSocket<IsServer> {
     /// Accept an incoming connection. This operation is available only if the socket is in the [`IsServer`] state.
     #[inline]
     pub fn accept(&self, connection: GnsConnection) -> GnsResult<()> {
@@ -911,7 +916,7 @@ impl<'x> GnsSocket<'x, IsServer> {
     }
 }
 
-impl<'x> GnsSocket<'x, IsClient> {
+impl GnsSocket<IsClient> {
     /// Return the socket connection. This operation is available only if the socket is in the [`IsClient`] state.
     #[inline]
     pub fn connection(&self) -> GnsConnection {

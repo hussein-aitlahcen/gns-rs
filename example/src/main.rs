@@ -10,8 +10,7 @@ use std::{
 // **unwrap** must be banned in production. unless you **know** what you are doing.
 
 fn server(port: u16) {
-    // Initialize valve GameNetworkingSocket library, this handle is unique, creating 2 instance would fail.
-    // Dropping/recreating the instance is allowed though.
+    // Initialize valve GameNetworkingSocket library and get a reference.
     // **unwrap** must be banned in production.
     let gns_global = GnsGlobal::get().unwrap();
     
@@ -42,7 +41,7 @@ fn server(port: u16) {
     // Note that GnsSocket implement drop for both server/client.
     // For the server, the listen socket + poll group are closed/cleaned up.
     // For the client, the connection is closed.
-    let server = GnsSocket::new(&gns_global)
+    let server = GnsSocket::new(gns_global.clone())
         .listen(Ipv4Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
@@ -72,7 +71,7 @@ fn server(port: u16) {
         }
 
         // Poll internal callbacks
-        server.poll_callbacks();
+        gns_global.poll_callbacks();
 
         // Broadcast a message to the provided clients.
         // We first build a list of messages and then send them.
@@ -185,7 +184,7 @@ fn client(port: u16) {
         |ty, message| println!("{:#?}: {}", ty, message),
     );
 
-    let client = GnsSocket::new(&gns_global)
+    let client = GnsSocket::new(gns_global.clone())
         .connect(Ipv4Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
@@ -193,7 +192,7 @@ fn client(port: u16) {
     let user_input_stream = user_input();
 
     'a: loop {
-        client.poll_callbacks();
+        gns_global.poll_callbacks();
 
         // Process some messages, we arbitrary define 100 as being the max number of messages we can handle per iteration.
         let _messages_processed = client.poll_messages::<100>(|message| {
