@@ -121,21 +121,10 @@ impl From<GnsError> for GnsResult<()> {
 ///
 /// A reference can be retrieved via [`GnsGlobal::get()`], which will initialize
 /// *GameNetworkingSockets* if it has not yet been initialized.
-/// 
-/// On drop (which is generally at the end of the program's lifetime),
-/// [`sys::GameNetworkingSockets_Kill`] will be called.
 pub struct GnsGlobal {
     utils: GnsUtils,
     next_queue_id: AtomicI64,
     event_queues: Mutex<HashMap<i64, Weak<SegQueue<GnsConnectionEvent>>>>,
-}
-
-impl Drop for GnsGlobal {
-    fn drop(&mut self) {
-        unsafe {
-            GameNetworkingSockets_Kill();
-        }
-    }
 }
 
 static GNS_GLOBAL: Mutex<Option<Arc<GnsGlobal>>> = Mutex::new(None);
@@ -622,13 +611,6 @@ impl<S> GnsSocket<S>
 where
     S: IsReady,
 {
-    /// Poll callbacks, allowing the low-level library to yield connection events.
-    #[deprecated(note="Use GnsGlobal::poll_callbacks()")]
-    #[inline]
-    pub fn poll_callbacks(&self) {
-        self.global.poll_callbacks();
-    }
-
     /// Get a connection lane status.
     /// This call is possible only if lanes has been previously configured using configure_connection_lanes
     #[inline]
