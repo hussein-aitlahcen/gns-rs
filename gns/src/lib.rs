@@ -62,6 +62,7 @@
 use crossbeam_queue::SegQueue;
 use either::Either;
 pub use gns_sys as sys;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::{
     collections::HashMap,
     ffi::{c_void, CStr, CString},
@@ -71,7 +72,6 @@ use std::{
     sync::{Arc, Mutex, Weak},
     time::Duration,
 };
-use std::sync::atomic::{AtomicI64, Ordering};
 use sys::*;
 
 fn get_interface() -> *mut ISteamNetworkingSockets {
@@ -131,14 +131,14 @@ static GNS_GLOBAL: Mutex<Option<Arc<GnsGlobal>>> = Mutex::new(None);
 
 impl GnsGlobal {
     /// Try to acquire a reference to the [`GnsGlobal`] instance.
-    /// 
+    ///
     /// If GnsGlobal has not yet been successfully initialized, a call to
     /// [`sys::GameNetworkingSockets_Init`] will be made. If successful, a reference to GnsGlobal
     /// will be returned.
-    /// 
+    ///
     /// If GnsGlobal has already been initialized, this method returns a reference to the already
     /// created GnsGlobal instance.
-    /// 
+    ///
     /// # Errors
     /// If a call to [`sys::GameNetworkingSockets_Init`] errors, that error will be propagated as a
     /// String message.
@@ -177,11 +177,14 @@ impl GnsGlobal {
     pub fn utils(&self) -> &GnsUtils {
         &self.utils
     }
-    
+
     fn create_queue(&self) -> (i64, Arc<SegQueue<GnsConnectionEvent>>) {
         let queue = Arc::new(SegQueue::new());
         let queue_id = self.next_queue_id.fetch_add(1, Ordering::SeqCst);
-        self.event_queues.lock().unwrap().insert(queue_id, Arc::downgrade(&queue));
+        self.event_queues
+            .lock()
+            .unwrap()
+            .insert(queue_id, Arc::downgrade(&queue));
         (queue_id, queue)
     }
 }
@@ -776,14 +779,15 @@ impl GnsSocket<IsCreated> {
         let gns_global = GnsGlobal::get()
             // GnsGlobal needs to be initialized to even reach this point in the first place.
             .expect("GnsGlobal should be initialized");
-        
+
+        let queue_id = info.m_info.m_nUserData as _;
         let mut queues = gns_global.event_queues.lock().unwrap();
-        if let Some(queue) = queues.get(&info.m_info.m_nUserData).cloned() {
+        if let Some(queue) = queues.get(&queue_id) {
             if let Some(queue) = queue.upgrade() {
                 queue.push(GnsConnectionEvent(*info));
             } else {
                 // The queue is no longer valid as the associated GnsSocket has been dropped
-                queues.remove(&info.m_info.m_nUserData);
+                queues.remove(&queue_id);
             }
         }
     }
