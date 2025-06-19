@@ -1,0 +1,9 @@
+(function() {
+    var type_impls = Object.fromEntries([["gns_sys",[["<details class=\"toggle implementors-toggle\" open><summary><section id=\"impl-Default-for-SteamNetworkingMessage_t\" class=\"impl\"><a class=\"src rightside\" href=\"src/gns_sys/home/apk/github/gns-rs/target/debug/build/gns-sys-774006b2cb4e85e8/out/bindings.rs.html#1919-1927\">Source</a><a href=\"#impl-Default-for-SteamNetworkingMessage_t\" class=\"anchor\">§</a><h3 class=\"code-header\">impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/default/trait.Default.html\" title=\"trait core::default::Default\">Default</a> for <a class=\"struct\" href=\"gns_sys/struct.SteamNetworkingMessage_t.html\" title=\"struct gns_sys::SteamNetworkingMessage_t\">SteamNetworkingMessage_t</a></h3></section></summary><div class=\"impl-items\"><details class=\"toggle method-toggle\" open><summary><section id=\"method.default\" class=\"method trait-impl\"><a class=\"src rightside\" href=\"src/gns_sys/home/apk/github/gns-rs/target/debug/build/gns-sys-774006b2cb4e85e8/out/bindings.rs.html#1920-1926\">Source</a><a href=\"#method.default\" class=\"anchor\">§</a><h4 class=\"code-header\">fn <a href=\"https://doc.rust-lang.org/nightly/core/default/trait.Default.html#tymethod.default\" class=\"fn\">default</a>() -&gt; Self</h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href=\"https://doc.rust-lang.org/nightly/core/default/trait.Default.html#tymethod.default\">Read more</a></div></details></div></details>","Default","gns_sys::ISteamNetworkingMessage"]]]]);
+    if (window.register_type_impls) {
+        window.register_type_impls(type_impls);
+    } else {
+        window.pending_type_impls = type_impls;
+    }
+})()
+//{"start":55,"fragment_lengths":[1526]}
