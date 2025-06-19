@@ -1,2 +1,4 @@
 .direnv
 /target
+
+**/.claude/settings.local.json
