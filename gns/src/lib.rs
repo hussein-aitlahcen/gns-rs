@@ -35,24 +35,23 @@
 //! // Important to know, regardless of the type of socket, whether it is in [`IsClient`] or [`IsServer`] state, theses three operations are the same.
 //! // The only difference is that polling for messages and status on the client only act on the client connection, while polling for messages and status on a server yield event for all connected clients.
 //!
-//! loop {
-//!   // Run the low-level callbacks.
-//!   gns_global.poll_callbacks();
+//! // You would loop on the below code.
+//! // Run the low-level callbacks.
+//! gns_global.poll_callbacks();
 //!
-//!   // Receive a maximum of 100 messages on the client connection.
-//!   // For each messages, print it's payload.
-//!   let _actual_nb_of_messages_processed = client.poll_messages::<100>(|message| {
-//!     println!("{}", core::str::from_utf8(message.payload()).unwrap());
-//!   });
+//! // Receive a maximum of 100 messages on the client connection.
+//! // For each messages, print it's payload.
+//! let _actual_nb_of_messages_processed = client.poll_messages::<100>(|message| {
+//!   println!("{}", core::str::from_utf8(message.payload()).unwrap());
+//! });
 //!
-//!   // Don't do anything with events.
-//!   // One would check the event for connection status, i.e. doing something when we are connected/disconnected from the server.
-//!   let _actual_nb_of_events_processed = client.poll_event::<100>(|_| {
-//!   });
+//! // Don't do anything with events.
+//! // One would check the event for connection status, i.e. doing something when we are connected/disconnected from the server.
+//! let _actual_nb_of_events_processed = client.poll_event::<100>(|_| {
+//! });
 //!
-//!   // Sleep a little bit.
-//!   std::thread::sleep(Duration::from_millis(10))
-//! }
+//! // Sleep a little bit.
+//! std::thread::sleep(Duration::from_millis(10))
 //! ```
 //!
 //! # Note
