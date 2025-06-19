@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Example of a reliable chat server/client based on gns"
 license = "MIT / Apache-2.0"
-authors = [ "Hussein Ait-Lahcen <hussein@gmail.com> <https://github.com/hussein-aitlahcen>" ]
+authors = [ "Hussein Ait-Lahcen <hussein.aitlahcen@gmail.com> <https://github.com/hussein-aitlahcen>" ]
 
 [dependencies]
 gns = { path = "../gns" }

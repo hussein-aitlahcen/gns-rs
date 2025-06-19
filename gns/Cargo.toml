@@ -5,7 +5,7 @@ edition = "2021"
 description = "Rust abstraction for Valve GameNetworkingSockets library."
 license = "MIT / Apache-2.0"
 repository = "https://github.com/hussein-aitlahcen/gns-rs"
-authors = [ "Hussein Ait-Lahcen <hussein@gmail.com> <https://github.com/hussein-aitlahcen>" ]
+authors = [ "Hussein Ait-Lahcen <hussein.aitlahcen@gmail.com> <https://github.com/hussein-aitlahcen>" ]
 keywords = ["gamedev", "networking", "udp"]
 categories = ["games"]
 
