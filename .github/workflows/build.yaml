@@ -2,8 +2,36 @@ name: "Build"
 on:
   push:
 jobs:
+  test-linux:
+    name: Test - Linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Build
+        run: |
+          nix develop -L --command bash -c "RUST_LOG=debug cargo test --workspace --exclude gns-sys"
+
+  test-windows:
+    name: Test - Windows
+    runs-on: windows-latest
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+      - name: Build
+        run: |
+          $Env:RUST_LOG = "debug"
+          cargo test --workspace --exclude gns-sys
+
   build-linux:
-    name: Linux Debug
+    name: Build - Linux
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
@@ -17,23 +45,8 @@ jobs:
         run: |
           nix develop -L --command bash -c "RUST_LOG=debug cargo build -p example -vvv"
 
-  build-linux-release:
-    name: Linux Release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Setup | Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: 'true'
-      - uses: cachix/install-nix-action@v31
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-      - name: Build
-        run: |
-          nix develop -L --command bash -c "RUST_LOG=debug cargo build -p example -vvv --release"
-
   build-windows:
-    name: Windows Debug
+    name: Build - Windows
     runs-on: windows-latest
     steps:
       - name: Setup | Checkout
@@ -44,17 +57,3 @@ jobs:
         run: |
           $Env:RUST_LOG = "debug"
           cargo build -p example -vvv
-
-
-  build-windows-release:
-    name: Windows Release
-    runs-on: windows-latest
-    steps:
-      - name: Setup | Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: 'true'
-      - name: Build
-        run: |
-          $Env:RUST_LOG = "debug"
-          cargo build -p example -vvv --release
