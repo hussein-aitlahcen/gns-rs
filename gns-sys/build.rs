@@ -1,18 +1,17 @@
 use std::{path::PathBuf, process::Command};
+use std::ffi::OsStr;
+use std::path::Path;
 
-fn main() {
-    let out_dir = std::env::var("OUT_DIR").unwrap();
+fn link(lib: impl AsRef<str>) {
+    println!("cargo:rustc-link-lib={}", lib.as_ref());
+}
 
-    let link = |x: &str| {
-        println!("cargo:rustc-link-lib={}", x);
-    };
+fn link_search(build_subpath: impl AsRef<Path>) {
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    println!("cargo:rustc-link-search={}", out_dir.join(build_subpath).display());
+}
 
-    let link_search = |x: &str| {
-        println!("cargo:rustc-link-search={}/{}", out_dir, x);
-    };
-
-    link_search("build/src");
-
+fn link_protobuf_default() {
     link("static=utf8_range");
     link("static=utf8_validity");
     link("static=absl_failure_signal_handler");
@@ -105,25 +104,119 @@ fn main() {
     link("static=absl_exponential_biased");
     link("static=absl_log_internal_conditions");
     link("static=absl_random_seed_sequences");
+    link("static=protobuf");
+}
+
+fn link_protobuf() {
+    let result = pkg_config::Config::new()
+        .statik(true)
+        .atleast_version("2.6.1")
+        .probe("protobuf");
+    match result {
+        Err(pkg_config::Error::EnvNoPkgConfig(_)) => {
+            println!(
+                "cargo::warning=pkg-config was not found in PATH, using default lib link flags\
+                 for protobuf"
+            );
+            link_protobuf_default();
+        },
+        Err(pkg_config::Error::ProbeFailure { name, command, output }) => {
+            println!(
+                "cargo::warning=library '{}' was not found by pkg-config; using default lib\
+                 link flags\n{}",
+                name.clone(),
+                pkg_config::Error::ProbeFailure { name, command, output },
+            );
+            link_protobuf_default();
+        },
+        Err(e) => Err(e).unwrap(),
+        Ok(_) => {},
+    };
+}
+
+fn link_openssl_default() {
+    link("static=crypto");
+    link("static=ssl");
+}
+
+fn link_openssl() {
+    let result = pkg_config::Config::new()
+        .statik(true)
+        .atleast_version("1.1.1")
+        .probe("openssl");
+    match result {
+        Err(pkg_config::Error::EnvNoPkgConfig(_)) => {
+            println!(
+                "cargo::warning=pkg-config was not found in PATH, using default lib link flags\
+                 for openssl"
+            );
+            link_openssl_default();
+        },
+        Err(pkg_config::Error::ProbeFailure { name, command, output }) => {
+            println!(
+                "cargo::warning=library '{}' was not found by pkg-config; using default lib\
+                 link flags\n{}",
+                name.clone(),
+                pkg_config::Error::ProbeFailure { name, command, output },
+            );
+            link_openssl_default();
+        },
+        Err(e) => Err(e).unwrap(),
+        Ok(_) => {},
+    }
+}
+
+// Copied from 'cc'; https://docs.rs/cc/latest/src/cc/lib.rs.html#3073
+fn link_stdlib() {
+    if cfg!(target_os = "windows") && cfg!(target_env = "msvc") {
+        // No stdlib linking needed for MSVC
+    } else if cfg!(target_vendor = "apple")
+        || cfg!(target_os = "freebsd")
+        || cfg!(target_os = "openbsd")
+        || cfg!(target_os = "aix")
+        || (cfg!(target_os = "linux") && cfg!(target_env = "ohos"))
+        || cfg!(target_os = "wasi")
+    {
+        link("c++");
+    } else if cfg!(target_os = "android") {
+        link("c++_shared");
+    } else {
+        link("stdc++");
+    }
+}
+
+fn main() {
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+
+    link_search("build/src");
+
     link("GameNetworkingSockets_s");
 
     let mut c = cmake::Config::new("thirdparty/GameNetworkingSockets");
 
-    if cfg!(target_os = "windows") {
+    let gns_src_dir = [
+        "thirdparty",
+        "GameNetworkingSockets",
+    ].into_iter().collect::<PathBuf>();
+
+    if cfg!(target_os = "windows") && cfg!(target_env = "msvc") {
+        let vcpkg_root = gns_src_dir.join("vcpkg");
+        let vcpkg_installed_root = gns_src_dir.join("vcpkg_installed");
+
         if Command::new("git")
             .args(&[
-                "clone",
-                "https://github.com/microsoft/vcpkg",
-                "thirdparty/GameNetworkingSockets/vcpkg",
+                OsStr::new("clone"),
+                OsStr::new("https://github.com/microsoft/vcpkg"),
+                vcpkg_root.as_os_str(),
             ])
             .status()
             .is_ok()
         {
-            Command::new("thirdparty/GameNetworkingSockets/vcpkg/bootstrap-vcpkg.bat")
+            Command::new(vcpkg_root.join("bootstrap-vcpkg.bat"))
                 .status()
                 .unwrap();
         }
-        Command::new("thirdparty/GameNetworkingSockets/vcpkg/vcpkg")
+        Command::new(vcpkg_root.join("vcpkg"))
             .args(&[
                 "install",
                 "--x-manifest-root=thirdparty/GameNetworkingSockets",
@@ -132,26 +225,47 @@ fn main() {
             .status()
             .unwrap();
 
+        let protobuf = vcpkg::Config::new()
+            .vcpkg_root(vcpkg_root.clone())
+            .vcpkg_installed_root(vcpkg_installed_root.clone())
+            .cargo_metadata(false)
+            .copy_dlls(false)
+            .target_triplet("x64-windows-static-md-release")
+            .find_package("protobuf")
+            .unwrap();
+
+        for line in protobuf.cargo_metadata {
+            // We use the vcpkg installed root in the thirdparty/ dir when scanning for metadata,
+            // but when actually linking we want to use the one under build/ that gets generated by
+            // the CMake build that happens after this
+            let line = line.replace(
+                "thirdparty\\GameNetworkingSockets\\vcpkg_installed",
+                &format!("{}", out_dir.join("build").join("vcpkg_installed").display()),
+            );
+            // vcpkg crate doesn't have any method to specify the link metadata as static, so
+            // manually do that here
+            let line = line.replace(
+                "cargo:rustc-link-lib=",
+                "cargo:rustc-link-lib=static=",
+            );
+            println!("{}", line);
+        }
+        
         let profile = std::env::var("PROFILE").unwrap();
         if profile == "release" {
             link_search("build/src/Release");
         } else {
             link_search("build/src/Debug");
         }
-        link_search("build/vcpkg_installed/x64-windows-static-md-release/lib");
-
-        link("static=libprotobuf");
-        link("static=absl_log_internal_structured_proto");
 
         c.define("USE_CRYPTO", "BCrypt");
         c.define("VCPKG_TARGET_TRIPLET", "x64-windows-static-md-release");
         c.define("VCPKG_BUILD_TYPE", profile.clone());
     } else {
-        link("static=protobuf");
-        link("static=crypto");
-        link("static=ssl");
-        link("stdc++");
+        link_protobuf();
+        link_openssl();
     }
+    link_stdlib();
 
     c.static_crt(false);
     c.define("BUILD_STATIC_LIB", "ON");
