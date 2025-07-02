@@ -16,5 +16,6 @@ crate-type = ["rlib", "staticlib"]
 bindgen = "0.70"
 cmake = "0.1"
 pkg-config = "0.3"
+vcpkg_rs_mf = "0.3"
 # GitHub repo has patches to support manifest mode that aren't published to crates.io yet
-vcpkg = { git = "https://github.com/mcgoo/vcpkg-rs.git" }
+# vcpkg = { git = "https://github.com/mcgoo/vcpkg-rs.git" }

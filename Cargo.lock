@@ -131,7 +131,7 @@ dependencies = [
  "bindgen",
  "cmake",
  "pkg-config",
- "vcpkg",
+ "vcpkg_rs_mf",
 ]
 
 [[package]]
@@ -280,9 +280,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a5f39404a5da50712a4c1eecf25e90dd62b613502b7e925fd4e4d19b5c96512"
 
 [[package]]
-name = "vcpkg"
-version = "0.2.15"
-source = "git+https://github.com/mcgoo/vcpkg-rs.git#fa42994af157924e44223f2559a95c906e00c1fa"
+name = "vcpkg_rs_mf"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11169d3d7f59d90334e36add6b4afb5f46fea52ebf7f4daace7d2c6a6725553c"
 
 [[package]]
 name = "windows-targets"
