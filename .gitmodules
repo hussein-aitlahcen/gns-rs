@@ -1,3 +1,0 @@
-[submodule "GameNetworkingSockets"]
-	path = gns-sys/thirdparty/GameNetworkingSockets
-	url = https://github.com/ValveSoftware/GameNetworkingSockets
