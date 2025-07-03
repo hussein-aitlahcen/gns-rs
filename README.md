@@ -13,11 +13,22 @@ Libraries:
 - `gns-sys` is the C++ library from Valve compiled with bindings generated (the library is directly compiled by cargo so you don't need to have it already installed).
 - `gns` is the high level, type-safe Rust wrapper.
 
+## Building
+
+A few system libraries/tools are required in order to compile the C++ library as part of `gns-sys`.
+
 System libraries required:
 - `clang`
 - `protobuf`
 - `openssl`
-- `abseil`
+- `abseil` (if using a recent version of protobuf)
 
 Tools required to be in $PATH:
+- `git`
 - `protobuf-compiler`
+
+### Windows
+
+Building on Windows uses [vcpkg](https://github.com/microsoft/vcpkg) in manifest mode to gather and 
+build dependencies. As such, the only requirement on Windows is to have `clang` installed and `git` 
+available in $PATH.
