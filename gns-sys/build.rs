@@ -1,6 +1,7 @@
 use std::{path::PathBuf, process::Command};
-use std::ffi::OsStr;
 use std::path::Path;
+
+static GNS_COMMIT: &str = "725e273c7442bac7a8bc903c0b210b1c15c34d92";
 
 fn link(lib: impl AsRef<str>) {
     println!("cargo:rustc-link-lib={}", lib.as_ref());
@@ -185,6 +186,39 @@ fn link_stdlib() {
     }
 }
 
+fn assert_cmd(cmd: &mut Command) {
+    let status = cmd.status().unwrap();
+    if !status.success() {
+        panic!("Failed to exec cmd ({status}): {cmd:?}");
+    }
+}
+
+fn git_clone(repo_url: &str, dst: &Path, commit: Option<&str>) {
+    let exists = if dst.exists() {
+        Command::new("git")
+            .arg("-C").arg(dst)
+            .arg("status")
+            .status().unwrap()
+            .success()
+    } else {
+        false
+    };
+    if !exists {
+        // Repo not created yet, clone it
+        assert_cmd(Command::new("git")
+            .args(["clone", repo_url])
+            .arg(dst.as_os_str()));
+    }
+    if let Some(commit) = commit {
+        assert_cmd(Command::new("git")
+            .arg("-C").arg(dst)
+            .args(["checkout", commit]));
+    }
+    assert_cmd(Command::new("git")
+        .arg("-C").arg(dst)
+        .args(["submodule", "update", "--init", "--recursive"]));
+}
+
 fn main() {
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
@@ -192,16 +226,21 @@ fn main() {
 
     link("GameNetworkingSockets_s");
 
-    let mut c = cmake::Config::new("thirdparty/GameNetworkingSockets");
+    let gns_src_dir = out_dir.join("GameNetworkingSockets");
+    git_clone(
+        "https://github.com/ValveSoftware/GameNetworkingSockets.git",
+        &gns_src_dir,
+        Some(GNS_COMMIT),
+    );
 
-    let gns_src_dir = [
-        "thirdparty",
-        "GameNetworkingSockets",
-    ].into_iter().collect::<PathBuf>();
+    let mut c = cmake::Config::new(&gns_src_dir);
 
     if cfg!(target_os = "windows") && cfg!(target_env = "msvc") {
         let vcpkg_root = gns_src_dir.join("vcpkg");
         let vcpkg_installed_root = out_dir.join("vcpkg").join("installed");
+
+        println!("cargo::rerun-if-env-changed=GNS_VCPKG_BUILDTREES_ROOT");
+        println!("cargo::rerun-if-env-changed=GNS_VCPKG_BUILDTREES_ROOT_NO_CHECK");
 
         let vcpkg_buildtrees_root = match std::env::var("GNS_VCPKG_BUILDTREES_ROOT") {
             Ok(v) => PathBuf::from(v),
@@ -227,31 +266,21 @@ fn main() {
             );
         }
 
-        if Command::new("git")
-            .args(&[
-                OsStr::new("clone"),
-                OsStr::new("https://github.com/microsoft/vcpkg"),
-                vcpkg_root.as_os_str(),
-            ])
-            .status()
-            .is_ok()
-        {
-            Command::new(vcpkg_root.join("bootstrap-vcpkg.bat"))
-                .status()
-                .unwrap();
-        }
-        let installed_root_arg = format!("--x-install-root={}", vcpkg_installed_root.display());
-        let buildtrees_root_arg = format!("--x-buildtrees-root={}", vcpkg_buildtrees_root.display());
-        Command::new(vcpkg_root.join("vcpkg"))
-            .args(&[
-                "install",
-                "--x-manifest-root=thirdparty/GameNetworkingSockets",
-                "--triplet=x64-windows-static-md-release",
-                &installed_root_arg,
-                &buildtrees_root_arg,
-            ])
+        git_clone(
+            "https://github.com/microsoft/vcpkg",
+            &vcpkg_root,
+            None,
+        );
+        Command::new(vcpkg_root.join("bootstrap-vcpkg.bat"))
             .status()
             .unwrap();
+        let buildtrees_root_arg = format!("--x-buildtrees-root={}", vcpkg_buildtrees_root.display());
+        assert_cmd(Command::new(vcpkg_root.join("vcpkg"))
+            .arg("install")
+            .arg(format!("--x-manifest-root={}", gns_src_dir.display()))
+            .arg("--triplet=x64-windows-static-md-release")
+            .arg(format!("--x-install-root={}", vcpkg_installed_root.display()))
+            .arg(&buildtrees_root_arg));
 
         let protobuf = vcpkg_rs_mf::Config::new()
             .vcpkg_root(vcpkg_root.clone())
@@ -298,13 +327,12 @@ fn main() {
     c.build();
 
     let bindings = bindgen::Builder::default()
-        .clang_arg("-Ithirdparty/GameNetworkingSockets/include/")
-        .clang_arg("-Ithirdparty/GameNetworkingSockets/src/public/")
-        .clang_arg("-Ithirdparty/GameNetworkingSockets/src/common/")
-        .clang_arg("-Ithirdparty/GameNetworkingSockets/src/common/")
+        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("include").display()))
+        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("public").display()))
+        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("common").display()))
         .clang_arg("-DSTEAMNETWORKINGSOCKETS_STANDALONELIB")
-        .header("thirdparty/GameNetworkingSockets/include/steam/steamnetworkingsockets_flat.h")
-        .header("thirdparty/GameNetworkingSockets/include/steam/steamnetworkingsockets.h")
+        .header(gns_src_dir.join("include").join("steam").join("steamnetworkingsockets_flat.h").to_string_lossy())
+        .header(gns_src_dir.join("include").join("steam").join("steamnetworkingsockets.h").to_string_lossy())
         .derive_debug(true)
         .derive_default(true)
         .derive_copy(true)
