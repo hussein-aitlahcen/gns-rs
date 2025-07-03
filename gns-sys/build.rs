@@ -169,17 +169,21 @@ fn link_openssl() {
 
 // Copied from 'cc'; https://docs.rs/cc/latest/src/cc/lib.rs.html#3073
 fn link_stdlib() {
-    if cfg!(target_os = "windows") && cfg!(target_env = "msvc") {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap();
+    let target_vendor = std::env::var("CARGO_CFG_TARGET_VENDOR").unwrap();
+
+    if &target_os == "windows" && &target_env == "msvc" {
         // No stdlib linking needed for MSVC
-    } else if cfg!(target_vendor = "apple")
-        || cfg!(target_os = "freebsd")
-        || cfg!(target_os = "openbsd")
-        || cfg!(target_os = "aix")
-        || (cfg!(target_os = "linux") && cfg!(target_env = "ohos"))
-        || cfg!(target_os = "wasi")
+    } else if &target_vendor == "apple"
+        || &target_os == "freebsd"
+        || &target_os == "openbsd"
+        || &target_os == "aix"
+        || (&target_os == "linux" && &target_env == "ohos")
+        || &target_os == "wasi"
     {
         link("c++");
-    } else if cfg!(target_os = "android") {
+    } else if &target_os == "android" {
         link("c++_shared");
     } else {
         link("stdc++");
@@ -220,6 +224,9 @@ fn git_clone(repo_url: &str, dst: &Path, commit: Option<&str>) {
 }
 
 fn main() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap();
+
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
     link_search("build/src");
@@ -235,7 +242,7 @@ fn main() {
 
     let mut c = cmake::Config::new(&gns_src_dir);
 
-    if cfg!(target_os = "windows") && cfg!(target_env = "msvc") {
+    if &target_os == "windows" && &target_env == "msvc" {
         let vcpkg_root = gns_src_dir.join("vcpkg");
         let vcpkg_installed_root = out_dir.join("vcpkg").join("installed");
 
