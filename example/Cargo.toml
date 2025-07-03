@@ -7,4 +7,4 @@ license = "MIT / Apache-2.0"
 authors = [ "Hussein Ait-Lahcen <hussein.aitlahcen@gmail.com> <https://github.com/hussein-aitlahcen>" ]
 
 [dependencies]
-gns = { path = "../gns" }
+game-networking-sockets = { path = "../gns" }
