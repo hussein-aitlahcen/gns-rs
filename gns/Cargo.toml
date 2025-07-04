@@ -13,6 +13,6 @@ categories.workspace = true
 name = "gns"
 
 [dependencies]
-game-networking-sockets-sys = { path = "../gns-sys" }
+game-networking-sockets-sys = { path = "../gns-sys", version = "0.1" }
 crossbeam-queue = "0.3"
 either = "1.7"
