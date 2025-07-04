@@ -15,7 +15,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Build
         run: |
-          nix develop -L --command bash -c "RUST_LOG=debug cargo test --workspace --exclude gns-sys"
+          nix develop -L --command bash -c "RUST_LOG=debug cargo test --workspace --exclude game-networking-sockets-sys"
 
   test-windows:
     name: Test - Windows
@@ -29,7 +29,7 @@ jobs:
         run: |
           $Env:RUST_LOG = "debug"
           $Env:GNS_VCPKG_BUILDTREES_ROOT="$Env:GITHUB_WORKSPACE\vcpkg-buildtrees"
-          cargo test --workspace --exclude gns-sys
+          cargo test --workspace --exclude game-networking-sockets-sys
 
   build-linux:
     name: Build - Linux
