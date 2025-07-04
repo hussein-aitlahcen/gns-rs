@@ -28,6 +28,7 @@ jobs:
       - name: Build
         run: |
           $Env:RUST_LOG = "debug"
+          $Env:GNS_VCPKG_BUILDTREES_ROOT="$Env:GITHUB_WORKSPACE\vcpkg-buildtrees"
           cargo test --workspace --exclude gns-sys
 
   build-linux:
@@ -56,4 +57,5 @@ jobs:
       - name: Build
         run: |
           $Env:RUST_LOG = "debug"
+          $Env:GNS_VCPKG_BUILDTREES_ROOT="$Env:GITHUB_WORKSPACE\vcpkg-buildtrees"
           cargo build -p example -vvv
