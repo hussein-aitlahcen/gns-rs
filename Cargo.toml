@@ -1,3 +1,13 @@
 [workspace]
 resolver = "2"
 members = [ "gns-sys", "gns", "example" ]
+
+[workspace.package]
+license = "MIT / Apache-2.0"
+repository = "https://github.com/hussein-aitlahcen/gns-rs"
+authors = [
+    "Hussein Ait-Lahcen <hussein.aitlahcen@gmail.com> <https://github.com/hussein-aitlahcen>",
+    "James M De Broeck <debroejm@gmail.com> <https://github.com/debroejm>",
+]
+keywords = ["gamedev", "networking", "udp"]
+categories = ["game-development"]

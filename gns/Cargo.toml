@@ -1,15 +1,19 @@
 [package]
-name = "gns"
-version = "0.1.0"
+name = "game-networking-sockets"
+version = "0.1.1"
 edition = "2021"
 description = "Rust abstraction for Valve GameNetworkingSockets library."
-license = "MIT / Apache-2.0"
-repository = "https://github.com/hussein-aitlahcen/gns-rs"
-authors = [ "Hussein Ait-Lahcen <hussein.aitlahcen@gmail.com> <https://github.com/hussein-aitlahcen>" ]
-keywords = ["gamedev", "networking", "udp"]
-categories = ["games"]
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../README.md"
+
+[lib]
+name = "gns"
 
 [dependencies]
-gns-sys = { path = "../gns-sys" }
+game-networking-sockets-sys = { path = "../gns-sys", version = "0.1" }
 crossbeam-queue = "0.3"
 either = "1.7"
