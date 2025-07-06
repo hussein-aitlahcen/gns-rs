@@ -1,8 +1,6 @@
 use std::{path::PathBuf, process::Command};
 use std::path::Path;
 
-static GNS_COMMIT: &str = "725e273c7442bac7a8bc903c0b210b1c15c34d92";
-
 fn link(lib: impl AsRef<str>) {
     println!("cargo:rustc-link-lib={}", lib.as_ref());
 }
@@ -227,18 +225,36 @@ fn main() {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap();
 
+    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
     link_search("build/src");
 
     link("GameNetworkingSockets_s");
 
-    let gns_src_dir = out_dir.join("GameNetworkingSockets");
-    git_clone(
-        "https://github.com/ValveSoftware/GameNetworkingSockets.git",
-        &gns_src_dir,
-        Some(GNS_COMMIT),
-    );
+    println!("cargo::rerun-if-changed={}", manifest_dir.join("src").display());
+
+    let gns_src_dir = manifest_dir.join("thirdparty").join("GameNetworkingSockets");
+    println!("cargo::rerun-if-changed={}", gns_src_dir.join("src").display());
+    println!("cargo::rerun-if-changed={}", gns_src_dir.join("include").display());
+    println!("cargo::rerun-if-changed={}", gns_src_dir.join("cmake").display());
+    println!("cargo::rerun-if-changed={}", gns_src_dir.join("CMakeLists.txt").display());
+    let gns_src_dir = if &target_os == "windows" && &target_env == "msvc" {
+        println!("cargo::rerun-if-changed={}", gns_src_dir.join("vcpkg.json").display());
+
+        // TODO: We can't make changes outside of OUT_DIR, but we need to clone/install vcpkg,
+        //  and _only_ on Windows. Upstream GameNetworkingSockets will only find vcpkg if it is
+        //  cloned to the root of it's src/ dir; we may want to submit a patch that will let it
+        //  find vcpkg elsewhere, to avoid cloning the src/ dir to OUT_DIR.
+        let new_dir = out_dir.join("GameNetworkingSockets");
+        if new_dir.exists() {
+            std::fs::remove_dir_all(&new_dir).unwrap();
+        }
+        dircpy::copy_dir(&gns_src_dir, &new_dir).unwrap();
+        new_dir
+    } else {
+        gns_src_dir
+    };
 
     let mut c = cmake::Config::new(&gns_src_dir);
 
