@@ -283,7 +283,7 @@ fn main() {
         //  and _only_ on Windows. Upstream GameNetworkingSockets will only find vcpkg if it is
         //  cloned to the root of it's src/ dir; we may want to submit a patch that will let it
         //  find vcpkg elsewhere, to avoid cloning the src/ dir to OUT_DIR.
-        let new_dir = out_dir.join("GameNetworkingSockets");
+        let new_dir = out_dir.join("GNS");
         if new_dir.exists() {
             std::fs::remove_dir_all(&new_dir).unwrap();
         }
