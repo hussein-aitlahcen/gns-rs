@@ -1,6 +1,6 @@
 [package]
 name = "game-networking-sockets-sys"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Rust bindings for Valve GameNetworkingSockets library."
 license.workspace = true
@@ -8,6 +8,31 @@ repository.workspace = true
 authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
+include = [
+    "build.rs",
+    "/src/",
+    "/thirdparty/",
+    "!/thirdparty/GameNetworkingSockets/.github/",
+    "!/thirdparty/GameNetworkingSockets/tests/",
+
+    # Need to include the CMakeLists.txt explicitly, but nothing else
+    "!/thirdparty/GameNetworkingSockets/examples/",
+    "/thirdparty/GameNetworkingSockets/examples/CMakeLists.txt",
+
+    # Ignore (possibly large) test files from curve25519-donna/
+    "!/thirdparty/GameNetworkingSockets/src/external/curve25519-donna/test*",
+
+    # Ignore (possibly large) test files from ed25519-donna/
+    "!/thirdparty/GameNetworkingSockets/src/external/ed25519-donna/test*",
+    "!/thirdparty/GameNetworkingSockets/src/external/ed25519-donna/regression*",
+    "!/thirdparty/GameNetworkingSockets/src/external/ed25519-donna/fuzz/",
+
+    # These may need to be included in the future if we add a P2P feature flag - in that case we'll have to be very
+    # selective about what parts of webrtc to include, since it's huge.
+    "!/thirdparty/GameNetworkingSockets/src/external/abseil/",
+    "!/thirdparty/GameNetworkingSockets/src/external/steamwebrtc/",
+    "!/thirdparty/GameNetworkingSockets/src/external/webrtc/",
+]
 
 [lib]
 name = "gns_sys"
@@ -16,6 +41,7 @@ crate-type = ["rlib", "staticlib"]
 [build-dependencies]
 bindgen = "0.70"
 cmake = "0.1"
+dircpy = "0.3"
 pkg-config = "0.3"
 # This is a fork of upstream vcpkg that has the latest master changes actually published to crates.io
 vcpkg_rs_mf = "0.3"
