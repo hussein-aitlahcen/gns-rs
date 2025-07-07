@@ -228,10 +228,6 @@ fn main() {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
-    link_search("build/src");
-
-    link("GameNetworkingSockets_s");
-
     println!("cargo::rerun-if-changed={}", manifest_dir.join("src").display());
 
     let gns_src_dir = manifest_dir.join("thirdparty").join("GameNetworkingSockets");
@@ -239,6 +235,47 @@ fn main() {
     println!("cargo::rerun-if-changed={}", gns_src_dir.join("include").display());
     println!("cargo::rerun-if-changed={}", gns_src_dir.join("cmake").display());
     println!("cargo::rerun-if-changed={}", gns_src_dir.join("CMakeLists.txt").display());
+
+    let bindings = bindgen::Builder::default()
+        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("include").display()))
+        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("public").display()))
+        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("common").display()))
+        .clang_arg("-DSTEAMNETWORKINGSOCKETS_STANDALONELIB")
+        .header(gns_src_dir.join("include").join("steam").join("steamnetworkingsockets_flat.h").to_string_lossy())
+        .header(gns_src_dir.join("include").join("steam").join("steamnetworkingsockets.h").to_string_lossy())
+        .derive_debug(true)
+        .derive_default(true)
+        .derive_copy(true)
+        .derive_partialord(true)
+        .derive_ord(true)
+        .derive_partialeq(true)
+        .derive_eq(true)
+        .derive_hash(true)
+        .use_core()
+        .layout_tests(false)
+        .default_enum_style(bindgen::EnumVariation::Rust {
+            non_exhaustive: false,
+        })
+        .clang_arg("-xc++")
+        .clang_arg("-std=c++20")
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .generate()
+        .expect("Unable to generate bindings");
+
+    bindings
+        .write_to_file(out_dir.join("bindings.rs"))
+        .expect("Couldn't write bindings!");
+
+    if std::env::var("DOCS_RS").is_ok() {
+        // We're building docs on docs.rs, and don't actually need to compile. Instead, just
+        // generate bindings and let docs build from that.
+        return
+    }
+
+    link_search("build/src");
+
+    link("GameNetworkingSockets_s");
+
     let gns_src_dir = if &target_os == "windows" && &target_env == "msvc" {
         println!("cargo::rerun-if-changed={}", gns_src_dir.join("vcpkg.json").display());
 
@@ -348,35 +385,4 @@ fn main() {
     c.define("OPENSSL_USE_STATIC_LIB", "ON");
     c.define("Protobuf_USE_STATIC_LIBS", "ON");
     c.build();
-
-    let bindings = bindgen::Builder::default()
-        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("include").display()))
-        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("public").display()))
-        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("common").display()))
-        .clang_arg("-DSTEAMNETWORKINGSOCKETS_STANDALONELIB")
-        .header(gns_src_dir.join("include").join("steam").join("steamnetworkingsockets_flat.h").to_string_lossy())
-        .header(gns_src_dir.join("include").join("steam").join("steamnetworkingsockets.h").to_string_lossy())
-        .derive_debug(true)
-        .derive_default(true)
-        .derive_copy(true)
-        .derive_partialord(true)
-        .derive_ord(true)
-        .derive_partialeq(true)
-        .derive_eq(true)
-        .derive_hash(true)
-        .use_core()
-        .layout_tests(false)
-        .default_enum_style(bindgen::EnumVariation::Rust {
-            non_exhaustive: false,
-        })
-        .clang_arg("-xc++")
-        .clang_arg("-std=c++20")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        .generate()
-        .expect("Unable to generate bindings");
-
-    let out_path = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-    bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
 }
