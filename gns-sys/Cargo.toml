@@ -1,6 +1,6 @@
 [package]
 name = "game-networking-sockets-sys"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Rust bindings for Valve GameNetworkingSockets library."
 license.workspace = true
