@@ -447,6 +447,13 @@ impl GnsNetworkMessage<ToSend> {
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GnsConnection(HSteamNetConnection);
 
+impl GnsConnection {
+    #[inline]
+    pub fn as_u32(&self) -> u32 {
+        self.0 as u32
+    }
+}
+
 #[derive(Default, Copy, Clone)]
 pub struct GnsConnectionInfo(SteamNetConnectionInfo_t);
 
