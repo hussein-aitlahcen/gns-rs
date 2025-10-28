@@ -1,4 +1,4 @@
-use std::{path::PathBuf, process::Command};
+use std::{fs, path::PathBuf, process::Command};
 use std::path::Path;
 
 fn link(lib: impl AsRef<str>) {
@@ -232,6 +232,24 @@ fn main() {
     let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap();
 
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+
+    let gns_src_dir = manifest_dir.join("thirdparty").join("GameNetworkingSockets");
+
+    /* start added */
+    // Path to your shim header
+    let shim_header = manifest_dir.join("c_shim").join("string_view_cstr_compat.h");
+
+    // Where to put it inside the submodule so it’s visible to all source files
+    // For example, copy it into the main include directory of GNS
+    let dest_header = gns_src_dir.join("include").join("string_view_cstr_compat.h");
+
+    // Create parent directories if they don’t exist
+    fs::create_dir_all(dest_header.parent().unwrap()).unwrap();
+
+    // Copy the file
+    fs::copy(&shim_header, &dest_header).unwrap();
+    /* end added */
+    
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
     println!("cargo::rerun-if-changed={}", manifest_dir.join("src").display());
@@ -389,7 +407,9 @@ fn main() {
     // c.define("CMAKE_OSX_ARCHITECTURES", "arm64");
     // c.define("CMAKE_POSITION_INDEPENDENT_CODE", "ON");
     // c.cxxflag("-std=c++17");
-    let shim_path = manifest_dir.join("c_shim").join("string_view_cstr_compat.h");
+    // let shim_path = manifest_dir.join("c_shim").join("string_view_cstr_compat.h");
+    // c.define("CMAKE_CXX_FLAGS", format!("-include {}", shim_path.display()));
+    let shim_path = gns_src_dir.join("include").join("string_view_cstr_compat.h");
     c.define("CMAKE_CXX_FLAGS", format!("-include {}", shim_path.display()));
     c.define("BUILD_STATIC_LIB", "ON");
     c.define("BUILD_SHARED_LIB", "OFF");
