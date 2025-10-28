@@ -107,8 +107,11 @@ fn link_protobuf_default() {
 }
 
 fn link_protobuf() {
-    let result = pkg_config::Config::new()
-        .statik(true)
+    let mut config = pkg_config::Config::new();
+    if std::env::var("CARGO_CFG_TARGET_OS").unwrap() != "macos" {
+        config.statik(true);
+    }
+    let result = config
         .atleast_version("2.6.1")
         .probe("protobuf");
     match result {
@@ -139,8 +142,11 @@ fn link_openssl_default() {
 }
 
 fn link_openssl() {
-    let result = pkg_config::Config::new()
-        .statik(true)
+    let mut config = pkg_config::Config::new();
+    if std::env::var("CARGO_CFG_TARGET_OS").unwrap() != "macos" {
+        config.statik(true);
+    }
+    let result = config
         .atleast_version("1.1.1")
         .probe("openssl");
     match result {
