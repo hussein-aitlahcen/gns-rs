@@ -35,3 +35,28 @@ Tools required to be in $PATH:
 Building on Windows uses [vcpkg](https://github.com/microsoft/vcpkg) in manifest mode to gather and 
 build dependencies. As such, the only requirement on Windows is to have `clang` installed and `git` 
 available in $PATH.
+
+### macOS
+
+#### Apple Silicon
+
+- Install these dependencies:
+```bash
+brew install openssl@3 protobuf@21
+```
+
+- Verify you’re using Protobuf 21.x:
+```bash
+protoc --version   # should print 3.21.x
+```
+
+- If you see errors like “no member named ‘c_str’ in ‘std::string_view’”, you’re likely picking up a newer Protobuf. Either unlink the newer one or point CMake to 21.x:
+```bash
+# Only if needed
+brew unlink protobuf
+brew link --overwrite protobuf@21   # add --force if keg-only warns
+```
+
+#### Intel
+
+Untested on Intel.
