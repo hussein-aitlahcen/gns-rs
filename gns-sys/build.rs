@@ -386,9 +386,11 @@ fn main() {
     link_stdlib();
 
     c.static_crt(false);
-    c.define("CMAKE_OSX_ARCHITECTURES", "arm64");
-    c.define("CMAKE_POSITION_INDEPENDENT_CODE", "ON");
-    c.cxxflag("-std=c++17");
+    // c.define("CMAKE_OSX_ARCHITECTURES", "arm64");
+    // c.define("CMAKE_POSITION_INDEPENDENT_CODE", "ON");
+    // c.cxxflag("-std=c++17");
+    let shim_path = manifest_dir.join("c_shim").join("string_view_cstr_compat.h");
+    c.define("CMAKE_CXX_FLAGS", format!("-include {}", shim_path.display()));
     c.define("BUILD_STATIC_LIB", "ON");
     c.define("BUILD_SHARED_LIB", "OFF");
     c.define("OPENSSL_USE_STATIC_LIB", "OFF");
