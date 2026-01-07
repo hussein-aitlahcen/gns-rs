@@ -579,6 +579,18 @@ impl GnsConnectionRealTimeStatus {
     pub fn approximated_queue_time(&self) -> Duration {
         Duration::from_micros(self.0.m_usecQueueTime as _)
     }
+
+    /// Returns the highest packet jitter experienced since the last time this
+    /// information was fetched. The high water mark is cleared each time you
+    /// fetch the info.
+    ///
+    /// Returns `None` if no jitter data is available (the underlying value is negative),
+    /// or if the connection type doesn't support jitter measurement.
+    #[inline]
+    pub fn max_jitter_usec(&self) -> Option<i32> {
+        let val = self.0.m_usecMaxJitter;
+        if val < 0 { None } else { Some(val) }
+    }
 }
 
 #[derive(Default, Copy, Clone)]
