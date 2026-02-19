@@ -170,7 +170,7 @@ checksum = "f449e6c6c08c865631d4890cfacf252b3d396c9bcc83adb6623cdb02a8336c41"
 
 [[package]]
 name = "game-networking-sockets"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "crossbeam-queue",
  "either",
