@@ -1016,4 +1016,40 @@ impl GnsUtils {
             Err(())
         }
     }
+
+    /// Set a per-connection configuration value, e.g. k_ESteamNetworkingConfig_SendRateMin/Max on an individual accepted connection
+    #[inline]
+    pub fn set_connection_config_value<'a>(
+        &self,
+        conn: GnsConnection,
+        typ: ESteamNetworkingConfigValue,
+        value: GnsConfig<'a>,
+    ) -> Result<(), ()> {
+        let result = match value {
+            GnsConfig::Float(x) => unsafe {
+                SteamAPI_ISteamNetworkingUtils_SetConnectionConfigValueFloat(
+                    get_utils(), conn.0, typ, x,
+                )
+            },
+            GnsConfig::Int32(x) => unsafe {
+                SteamAPI_ISteamNetworkingUtils_SetConnectionConfigValueInt32(
+                    get_utils(), conn.0, typ, x as i32,
+                )
+            },
+            GnsConfig::String(x) => unsafe {
+                SteamAPI_ISteamNetworkingUtils_SetConnectionConfigValueString(
+                    get_utils(),
+                    conn.0,
+                    typ,
+                    CString::new(x).expect("str; qed;").as_c_str().as_ptr(),
+                )
+            },
+            GnsConfig::Ptr(_) => return Err(()),
+        };
+        if result {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
 }
