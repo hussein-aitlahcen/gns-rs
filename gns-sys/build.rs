@@ -1,5 +1,5 @@
-use std::{path::PathBuf, process::Command};
 use std::path::Path;
+use std::{path::PathBuf, process::Command};
 
 fn link(lib: impl AsRef<str>) {
     println!("cargo:rustc-link-lib={}", lib.as_ref());
@@ -7,7 +7,10 @@ fn link(lib: impl AsRef<str>) {
 
 fn link_search(build_subpath: impl AsRef<Path>) {
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-    println!("cargo:rustc-link-search={}", out_dir.join(build_subpath).display());
+    println!(
+        "cargo:rustc-link-search={}",
+        out_dir.join(build_subpath).display()
+    );
 }
 
 fn link_protobuf_default() {
@@ -111,9 +114,7 @@ fn link_protobuf() {
     if std::env::var("CARGO_CFG_TARGET_OS").unwrap() != "macos" {
         config.statik(true);
     }
-    let result = config
-        .atleast_version("2.6.1")
-        .probe("protobuf");
+    let result = config.atleast_version("2.6.1").probe("protobuf");
     match result {
         Err(pkg_config::Error::EnvNoPkgConfig(_)) => {
             println!(
@@ -121,18 +122,26 @@ fn link_protobuf() {
                  for protobuf"
             );
             link_protobuf_default();
-        },
-        Err(pkg_config::Error::ProbeFailure { name, command, output }) => {
+        }
+        Err(pkg_config::Error::ProbeFailure {
+            name,
+            command,
+            output,
+        }) => {
             println!(
                 "cargo::warning=library '{}' was not found by pkg-config; using default lib\
                  link flags\n{}",
                 name.clone(),
-                pkg_config::Error::ProbeFailure { name, command, output },
+                pkg_config::Error::ProbeFailure {
+                    name,
+                    command,
+                    output
+                },
             );
             link_protobuf_default();
-        },
+        }
         Err(e) => panic!("{:?}", e),
-        Ok(_) => {},
+        Ok(_) => {}
     };
 }
 
@@ -146,9 +155,7 @@ fn link_openssl() {
     if std::env::var("CARGO_CFG_TARGET_OS").unwrap() != "macos" {
         config.statik(true);
     }
-    let result = config
-        .atleast_version("1.1.1")
-        .probe("openssl");
+    let result = config.atleast_version("1.1.1").probe("openssl");
     match result {
         Err(pkg_config::Error::EnvNoPkgConfig(_)) => {
             println!(
@@ -156,18 +163,26 @@ fn link_openssl() {
                  for openssl"
             );
             link_openssl_default();
-        },
-        Err(pkg_config::Error::ProbeFailure { name, command, output }) => {
+        }
+        Err(pkg_config::Error::ProbeFailure {
+            name,
+            command,
+            output,
+        }) => {
             println!(
                 "cargo::warning=library '{}' was not found by pkg-config; using default lib\
                  link flags\n{}",
                 name.clone(),
-                pkg_config::Error::ProbeFailure { name, command, output },
+                pkg_config::Error::ProbeFailure {
+                    name,
+                    command,
+                    output
+                },
             );
             link_openssl_default();
-        },
+        }
         Err(e) => panic!("{:?}", e),
-        Ok(_) => {},
+        Ok(_) => {}
     }
 }
 
@@ -204,27 +219,37 @@ fn assert_cmd(cmd: &mut Command) {
 fn git_clone(repo_url: &str, dst: &Path, commit: Option<&str>) {
     let exists = if dst.exists() {
         Command::new("git")
-            .arg("-C").arg(dst)
+            .arg("-C")
+            .arg(dst)
             .arg("status")
-            .status().unwrap()
+            .status()
+            .unwrap()
             .success()
     } else {
         false
     };
     if !exists {
         // Repo not created yet, clone it
-        assert_cmd(Command::new("git")
-            .args(["clone", repo_url])
-            .arg(dst.as_os_str()));
+        assert_cmd(
+            Command::new("git")
+                .args(["clone", repo_url])
+                .arg(dst.as_os_str()),
+        );
     }
     if let Some(commit) = commit {
-        assert_cmd(Command::new("git")
-            .arg("-C").arg(dst)
-            .args(["checkout", commit]));
+        assert_cmd(
+            Command::new("git")
+                .arg("-C")
+                .arg(dst)
+                .args(["checkout", commit]),
+        );
     }
-    assert_cmd(Command::new("git")
-        .arg("-C").arg(dst)
-        .args(["submodule", "update", "--init", "--recursive"]));
+    assert_cmd(Command::new("git").arg("-C").arg(dst).args([
+        "submodule",
+        "update",
+        "--init",
+        "--recursive",
+    ]));
 }
 
 fn main() {
@@ -234,21 +259,59 @@ fn main() {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
-    println!("cargo::rerun-if-changed={}", manifest_dir.join("src").display());
+    println!(
+        "cargo::rerun-if-changed={}",
+        manifest_dir.join("src").display()
+    );
 
-    let gns_src_dir = manifest_dir.join("thirdparty").join("GameNetworkingSockets");
-    println!("cargo::rerun-if-changed={}", gns_src_dir.join("src").display());
-    println!("cargo::rerun-if-changed={}", gns_src_dir.join("include").display());
-    println!("cargo::rerun-if-changed={}", gns_src_dir.join("cmake").display());
-    println!("cargo::rerun-if-changed={}", gns_src_dir.join("CMakeLists.txt").display());
+    let gns_src_dir = manifest_dir
+        .join("thirdparty")
+        .join("GameNetworkingSockets");
+    println!(
+        "cargo::rerun-if-changed={}",
+        gns_src_dir.join("src").display()
+    );
+    println!(
+        "cargo::rerun-if-changed={}",
+        gns_src_dir.join("include").display()
+    );
+    println!(
+        "cargo::rerun-if-changed={}",
+        gns_src_dir.join("cmake").display()
+    );
+    println!(
+        "cargo::rerun-if-changed={}",
+        gns_src_dir.join("CMakeLists.txt").display()
+    );
 
     let bindings = bindgen::Builder::default()
-        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("include").display()))
-        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("public").display()))
-        .clang_arg(format!("-I{}", gns_src_dir.join("src").join("common").display()))
+        .clang_arg(format!(
+            "-I{}",
+            gns_src_dir.join("src").join("include").display()
+        ))
+        .clang_arg(format!(
+            "-I{}",
+            gns_src_dir.join("src").join("public").display()
+        ))
+        .clang_arg(format!(
+            "-I{}",
+            gns_src_dir.join("src").join("common").display()
+        ))
         .clang_arg("-DSTEAMNETWORKINGSOCKETS_STANDALONELIB")
-        .header(gns_src_dir.join("include").join("steam").join("steamnetworkingsockets_flat.h").to_string_lossy())
-        .header(gns_src_dir.join("include").join("steam").join("steamnetworkingsockets.h").to_string_lossy())
+        .header(
+            gns_src_dir
+                .join("include")
+                .join("steam")
+                .join("steamnetworkingsockets_flat.h")
+                .to_string_lossy(),
+        )
+        .header(
+            gns_src_dir
+                .join("include")
+                .join("steam")
+                .join("steamnetworkingsockets.h")
+                .to_string_lossy(),
+        )
         .derive_debug(true)
         .derive_default(true)
         .derive_copy(true)
@@ -275,7 +338,7 @@ fn main() {
     if std::env::var("DOCS_RS").is_ok() {
         // We're building docs on docs.rs, and don't actually need to compile. Instead, just
         // generate bindings and let docs build from that.
-        return
+        return;
     }
 
     link_search("build/src");
@@ -283,7 +346,10 @@ fn main() {
     link("GameNetworkingSockets_s");
 
     let gns_src_dir = if &target_os == "windows" && &target_env == "msvc" {
-        println!("cargo::rerun-if-changed={}", gns_src_dir.join("vcpkg.json").display());
+        println!(
+            "cargo::rerun-if-changed={}",
+            gns_src_dir.join("vcpkg.json").display()
+        );
 
         // TODO: We can't make changes outside of OUT_DIR, but we need to clone/install vcpkg,
         //  and _only_ on Windows. Upstream GameNetworkingSockets will only find vcpkg if it is
@@ -332,21 +398,23 @@ fn main() {
             );
         }
 
-        git_clone(
-            "https://github.com/microsoft/vcpkg",
-            &vcpkg_root,
-            None,
-        );
+        git_clone("https://github.com/microsoft/vcpkg", &vcpkg_root, None);
         Command::new(vcpkg_root.join("bootstrap-vcpkg.bat"))
             .status()
             .unwrap();
-        let buildtrees_root_arg = format!("--x-buildtrees-root={}", vcpkg_buildtrees_root.display());
-        assert_cmd(Command::new(vcpkg_root.join("vcpkg"))
-            .arg("install")
-            .arg(format!("--x-manifest-root={}", gns_src_dir.display()))
-            .arg("--triplet=x64-windows-static-md-release")
-            .arg(format!("--x-install-root={}", vcpkg_installed_root.display()))
-            .arg(&buildtrees_root_arg));
+        let buildtrees_root_arg =
+            format!("--x-buildtrees-root={}", vcpkg_buildtrees_root.display());
+        assert_cmd(
+            Command::new(vcpkg_root.join("vcpkg"))
+                .arg("install")
+                .arg(format!("--x-manifest-root={}", gns_src_dir.display()))
+                .arg("--triplet=x64-windows-static-md-release")
+                .arg(format!(
+                    "--x-install-root={}",
+                    vcpkg_installed_root.display()
+                ))
+                .arg(&buildtrees_root_arg),
+        );
 
         let protobuf = vcpkg_rs_mf::Config::new()
             .vcpkg_root(vcpkg_root.clone())
@@ -360,13 +428,10 @@ fn main() {
         for line in protobuf.cargo_metadata {
             // vcpkg crate doesn't have any method to specify the link metadata as static, so
             // manually do that here
-            let line = line.replace(
-                "cargo:rustc-link-lib=",
-                "cargo:rustc-link-lib=static=",
-            );
+            let line = line.replace("cargo:rustc-link-lib=", "cargo:rustc-link-lib=static=");
             println!("{}", line);
         }
-        
+
         let profile = std::env::var("PROFILE").unwrap();
         if profile == "release" {
             link_search("build/src/Release");
@@ -379,6 +444,8 @@ fn main() {
         c.define("VCPKG_BUILD_TYPE", profile.clone());
         c.define("VCPKG_INSTALLED_DIR", &vcpkg_installed_root);
         c.define("VCPKG_INSTALL_OPTIONS", &buildtrees_root_arg);
+        c.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL");
+        c.cflag("/DNDEBUG").cxxflag("/DNDEBUG");
     } else {
         link_protobuf();
         link_openssl();
