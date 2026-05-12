@@ -2,9 +2,12 @@
 //! These tests verify the configuration and debug capabilities of the GNS library
 
 use gns::sys::*;
-use gns::{GnsConfig, GnsGlobal, GnsSocket};
+use gns::{GnsConfig, GnsGlobal, GnsSocket, SendFlags};
 
 use std::net::Ipv4Addr;
+
+mod common;
+use common::free_port;
 
 #[test]
 fn test_global_config_values() {
@@ -41,30 +44,26 @@ fn test_message_flags() {
 
     // Allocate a message with reliable flag
     let connection = gns::GnsConnection::default();
-    let message = gns_global.utils().allocate_message(
-        connection,
-        k_nSteamNetworkingSend_Reliable,
-        b"Test message",
-    );
+    let message =
+        gns_global
+            .utils()
+            .allocate_message(connection, SendFlags::RELIABLE, &b"Test message"[..]);
 
     // Verify flag is set correctly
-    assert_eq!(
-        message.flags() & k_nSteamNetworkingSend_Reliable as i32,
-        k_nSteamNetworkingSend_Reliable as i32,
+    assert!(
+        message.flags().contains(SendFlags::RELIABLE),
         "Reliable flag not set correctly"
     );
 
     // Allocate a message with unreliable flag
     let message = gns_global.utils().allocate_message(
         connection,
-        k_nSteamNetworkingSend_Unreliable,
-        b"Test message",
+        SendFlags::UNRELIABLE,
+        &b"Test message"[..],
     );
 
-    // Verify flag is set correctly
-    assert_eq!(
-        message.flags() & k_nSteamNetworkingSend_Unreliable as i32,
-        k_nSteamNetworkingSend_Unreliable as i32,
+    assert!(
+        message.flags().contains(SendFlags::UNRELIABLE),
         "Unreliable flag not set correctly"
     );
 
@@ -72,7 +71,7 @@ fn test_message_flags() {
     let user_data = 12345;
     let message = gns_global
         .utils()
-        .allocate_message(connection, k_nSteamNetworkingSend_Reliable, b"Test message")
+        .allocate_message(connection, SendFlags::RELIABLE, &b"Test message"[..])
         .set_user_data(user_data);
 
     // Verify user data is set correctly
@@ -93,8 +92,8 @@ fn test_connection_info() {
 
     // Just check that the get_connection_info function exists and doesn't crash
     // We expect it to return None for a default connection
-    let info = GnsSocket::new(gns_global.clone())
-        .listen(Ipv4Addr::LOCALHOST.into(), 59999)
+    let info = GnsSocket::new(gns_global)
+        .listen(Ipv4Addr::LOCALHOST.into(), free_port())
         .expect("Failed to create server socket")
         .get_connection_info(conn);
 

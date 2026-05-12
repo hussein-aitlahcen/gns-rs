@@ -131,7 +131,7 @@ fn link_protobuf() {
             );
             link_protobuf_default();
         },
-        Err(e) => Err(e).unwrap(),
+        Err(e) => panic!("{:?}", e),
         Ok(_) => {},
     };
 }
@@ -166,7 +166,7 @@ fn link_openssl() {
             );
             link_openssl_default();
         },
-        Err(e) => Err(e).unwrap(),
+        Err(e) => panic!("{:?}", e),
         Ok(_) => {},
     }
 }
