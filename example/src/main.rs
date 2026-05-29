@@ -101,7 +101,7 @@ fn server(port: u16) {
         };
 
         // Process connections events.
-        let _events_processed = server.poll_event::<100>(|event| {
+        for event in server.receive_events() {
           match (event.old_state(), event.info().state()) {
             // A client is about to connect, accept it.
             (
@@ -142,7 +142,7 @@ fn server(port: u16) {
               );
               connected_clients.remove(&conn);
               // Make sure we cleanup the connection, mandatory as per GNS doc.
-              server.close_connection(conn, 0, None, false);
+              let _ = server.close_connection(conn, 0, None, false);
             }
 
             // A client state is changing, perhaps disconnecting
@@ -151,10 +151,10 @@ fn server(port: u16) {
               println!("GnsSocket<Server>: {:#?} => {:#?}.", previous, current);
             }
           }
-        });
+        }
 
         // Process some messages, we arbitrary define 100 as being the max number of messages we can handle per iteration.
-        let _messages_processed = server.poll_messages::<100>(|message| {
+        for message in server.receive_messages::<100>().into_iter().flatten() {
             let chat_message = core::str::from_utf8(message.payload())
                 // **unwrap** must be banned in production.
                 .unwrap();
@@ -166,7 +166,7 @@ fn server(port: u16) {
                 sender_nickname,
                 chat_message,
             );
-        });
+        }
 
         std::thread::sleep(Duration::from_millis(10))
     }
@@ -210,18 +210,18 @@ fn client(port: u16) {
         gns_global.poll_callbacks();
 
         // Process some messages, we arbitrary define 100 as being the max number of messages we can handle per iteration.
-        let _messages_processed = client.poll_messages::<100>(|message| {
+        for message in client.receive_messages::<100>().into_iter().flatten() {
             println!(
                 "(Chat) {}",
                 core::str::from_utf8(message.payload())
                     // **unwrap** must be banned in production.
                     .unwrap()
             );
-        });
+        }
 
         let mut quit = false;
-        let _ =
-            client.poll_event::<100>(|event| match (event.old_state(), event.info().state()) {
+        for event in client.receive_events() {
+            match (event.old_state(), event.info().state()) {
                 (
                     ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_None,
                     ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting,
@@ -242,8 +242,8 @@ fn client(port: u16) {
                 (previous, current) => {
                     println!("GnsSocket<Client>: {:#?} => {:#?}.", previous, current);
                 }
-
-            });
+            }
+        }
         if quit {
             break 'a;
         }
@@ -253,11 +253,11 @@ fn client(port: u16) {
             if input == "quit" {
                 break 'a;
             }
-            client.send_messages(vec![gns_global.utils().allocate_message(
+            let _ = client.send_message(gns_global.utils().allocate_message(
                 client.connection(),
                 SendFlags::RELIABLE,
                 input.as_bytes().to_vec(),
-            )]);
+            ));
         }
 
         std::thread::sleep(Duration::from_millis(10))

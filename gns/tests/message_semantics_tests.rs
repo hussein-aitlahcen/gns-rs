@@ -283,7 +283,7 @@ fn test_send_messages_mixed_success_and_failure() {
 
             while !*server_done.lock().unwrap() {
                 gns_global.poll_callbacks();
-                server.poll_event::<32>(|event| {
+                for event in server.receive_events() {
                     if let (
                         ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_None,
                         ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting,
@@ -291,10 +291,10 @@ fn test_send_messages_mixed_success_and_failure() {
                     {
                         let _ = server.accept(event.connection());
                     }
-                });
-                server.poll_messages::<32>(|_message| {
+                }
+                for _message in server.receive_messages::<32>().expect("receive_messages failed") {
                     *server_msg_count.lock().unwrap() += 1;
-                });
+                }
                 thread::sleep(Duration::from_millis(10));
             }
         });
@@ -311,7 +311,7 @@ fn test_send_messages_mixed_success_and_failure() {
     let start = Instant::now();
     while !connected && start.elapsed() < Duration::from_secs(5) {
         gns_global.poll_callbacks();
-        client.poll_event::<32>(|event| {
+        for event in client.receive_events() {
             if event.old_state()
                 == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting
                 && event.info().state()
@@ -319,7 +319,7 @@ fn test_send_messages_mixed_success_and_failure() {
             {
                 connected = true;
             }
-        });
+        }
         thread::sleep(Duration::from_millis(10));
     }
     assert!(connected, "client failed to connect");

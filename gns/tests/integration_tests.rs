@@ -3,7 +3,7 @@
 //! using the gns library.
 
 use gns::sys::*;
-use gns::{GnsGlobal, GnsSocket, SendFlags};
+use gns::{GnsGlobal, GnsSocket, MessageSlot, SendFlags};
 
 use std::{
     collections::HashSet,
@@ -38,13 +38,17 @@ fn run_server(
         // Connected clients
         let mut clients = HashSet::new();
 
+        // Reused receive buffer: allocated once and borrowed by
+        // `receive_messages_into` each tick (the zero-move polling pattern).
+        let mut recv_buf = [const { MessageSlot::uninit() }; 100];
+
         // Main server loop
         while !*server_done.lock().unwrap() {
             // Poll callbacks
             gns_global.poll_callbacks();
 
             // Process connection events
-            server.poll_event::<100>(|event| {
+            for event in server.receive_events() {
                 match (event.old_state(), event.info().state()) {
                     // New connection
                     (
@@ -61,15 +65,18 @@ fn run_server(
                     (_, ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_ClosedByPeer
                     | ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_ProblemDetectedLocally) => {
                         clients.remove(&event.connection());
-                        server.close_connection(event.connection(), 0, None, false);
+                        let _ = server.close_connection(event.connection(), 0, None, false);
                     },
 
                     _ => {}
                 }
-            });
+            }
 
             // Process messages
-            server.poll_messages::<100>(|message| {
+            for message in server
+                .receive_messages_into(&mut recv_buf)
+                .expect("receive_messages_into failed")
+            {
                 let msg = std::str::from_utf8(message.payload())
                     .expect("Failed to decode message")
                     .to_string();
@@ -84,7 +91,7 @@ fn run_server(
                     );
                     server.send_messages(vec![echo_msg]);
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -114,12 +121,12 @@ fn run_client(
         while !connected && start_time.elapsed() < Duration::from_secs(5) {
             gns_global.poll_callbacks();
 
-            client.poll_event::<100>(|event| {
+            for event in client.receive_events() {
                 if event.old_state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting
                    && event.info().state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connected {
                     connected = true;
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -143,13 +150,13 @@ fn run_client(
         while !*client_done.lock().unwrap() {
             gns_global.poll_callbacks();
 
-            client.poll_messages::<100>(|message| {
+            for message in client.receive_messages::<100>().expect("receive_messages failed") {
                 let msg = std::str::from_utf8(message.payload())
                     .expect("Failed to decode message")
                     .to_string();
 
                 messages_received.lock().unwrap().push(msg);
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -372,7 +379,7 @@ fn test_client_connection_and_disconnection() {
             gns_global.poll_callbacks();
 
             // Process connection events
-            server.poll_event::<100>(|event| {
+            for event in server.receive_events() {
                 // Record connection state changes
                 connection_events_clone
                     .lock()
@@ -387,7 +394,7 @@ fn test_client_connection_and_disconnection() {
                     let result = server.accept(event.connection());
                     assert!(result.is_ok(), "Failed to accept connection");
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -412,12 +419,12 @@ fn test_client_connection_and_disconnection() {
         while !connected && start_time.elapsed() < Duration::from_secs(5) {
             gns_global.poll_callbacks();
 
-            client.poll_event::<100>(|event| {
+            for event in client.receive_events() {
                 if event.old_state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting
                    && event.info().state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connected {
                     connected = true;
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }

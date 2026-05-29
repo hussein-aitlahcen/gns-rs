@@ -65,7 +65,7 @@ fn test_connection_lane_configuration() {
             gns_global.poll_callbacks();
 
             // Process connection events
-            server.poll_event::<100>(|event| {
+            for event in server.receive_events() {
                 match (event.old_state(), event.info().state()) {
                     // New connection
                     (
@@ -84,15 +84,15 @@ fn test_connection_lane_configuration() {
                         if Some(event.connection()) == client_connection {
                             client_connection = None;
                         }
-                        server.close_connection(event.connection(), 0, None, false);
+                        let _ = server.close_connection(event.connection(), 0, None, false);
                     },
 
                     _ => {}
                 }
-            });
+            }
 
             // Process messages and record which lane they were received on
-            server.poll_messages::<100>(|message| {
+            for message in server.receive_messages::<100>().expect("receive_messages failed") {
                 let payload =
                     std::str::from_utf8(message.payload()).expect("Failed to decode message");
 
@@ -101,7 +101,7 @@ fn test_connection_lane_configuration() {
                     let lane = message.lane();
                     server_messages_clone.lock().unwrap().push((msg_idx, lane));
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -131,12 +131,12 @@ fn test_connection_lane_configuration() {
         while !connected && start_time.elapsed() < Duration::from_secs(5) {
             gns_global.poll_callbacks();
 
-            client.poll_event::<100>(|event| {
+            for event in client.receive_events() {
                 if event.old_state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting
                    && event.info().state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connected {
                     connected = true;
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -313,7 +313,7 @@ fn test_get_connection_real_time_lane_status() {
             gns_global.poll_callbacks();
 
             // Process connection events
-            server.poll_event::<100>(|event| {
+            for event in server.receive_events() {
                 match (event.old_state(), event.info().state()) {
                     // New connection
                     (
@@ -333,7 +333,7 @@ fn test_get_connection_real_time_lane_status() {
                         if Some(event.connection()) == *conn {
                             *conn = None;
                         }
-                        server.close_connection(event.connection(), 0, None, false);
+                        let _ = server.close_connection(event.connection(), 0, None, false);
                     },
 
                     // Client is now connected
@@ -354,7 +354,7 @@ fn test_get_connection_real_time_lane_status() {
 
                     _ => {}
                 }
-            });
+            }
 
             // Periodically check lane status if we have a client
             if let Some(conn) = *client_conn_clone.lock().unwrap() {
@@ -400,12 +400,12 @@ fn test_get_connection_real_time_lane_status() {
         while !connected && start_time.elapsed() < Duration::from_secs(5) {
             gns_global.poll_callbacks();
 
-            client.poll_event::<100>(|event| {
+            for event in client.receive_events() {
                 if event.old_state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting
                    && event.info().state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connected {
                     connected = true;
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
