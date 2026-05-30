@@ -30,7 +30,7 @@ jobs:
         name: Setup | Use Nix
         uses: rrbutani/use-nix-shell-action@v1
       - name: Release
-        uses: release-plz/action@v0.5
+        uses: release-plz/action@064f4d1
         with:
           command: release
         env:
@@ -52,7 +52,7 @@ jobs:
       - *install-nix
       - *use-nix
       - name: Release PR
-        uses: release-plz/action@v0.5
+        uses: release-plz/action@064f4d1
         with:
           command: release-pr
         env:
