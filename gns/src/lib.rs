@@ -72,10 +72,12 @@ use std::{
 };
 use sys::*;
 
+#[inline]
 fn get_interface() -> *mut ISteamNetworkingSockets {
     unsafe { SteamAPI_SteamNetworkingSockets_v009() }
 }
 
+#[inline]
 fn get_utils() -> *mut ISteamNetworkingUtils {
     unsafe { SteamAPI_SteamNetworkingUtils_v003() }
 }
@@ -108,6 +110,7 @@ pub enum GnsError {
 pub type GnsResult<T> = Result<T, GnsError>;
 
 /// Map an `EResult` returned by an FFI call to a [`GnsResult`].
+#[inline]
 fn check(e: EResult) -> GnsResult<()> {
     match e {
         EResult::k_EResultOK => Ok(()),
@@ -134,6 +137,7 @@ pub struct GnsGlobal {
 static GNS_GLOBAL: OnceLock<GnsGlobal> = OnceLock::new();
 
 impl Drop for GnsGlobal {
+    #[inline]
     fn drop(&mut self) {
         // Stop the GNS service thread and tear down internal state.
         // GNS does not support `_Init`/`_Kill`/`_Init` cycles across all
@@ -186,20 +190,24 @@ impl GnsGlobal {
         Ok(GNS_GLOBAL.get().expect("impossible; qed;"))
     }
 
+    #[inline]
     pub fn poll_callbacks(&self) {
         unsafe {
             SteamAPI_ISteamNetworkingSockets_RunCallbacks(get_interface());
         }
     }
 
+    #[inline]
     pub fn utils(&self) -> &GnsUtils {
         &self.utils
     }
 
+    #[inline]
     pub fn queue_count(&self) -> usize {
         self.event_queues.read().unwrap().len()
     }
 
+    #[inline]
     fn create_queue(&self) -> (i64, Arc<SegQueue<GnsConnectionEvent>>) {
         let queue = Arc::new(SegQueue::new());
         let queue_id = self.next_queue_id.fetch_add(1, Ordering::SeqCst);
@@ -252,6 +260,7 @@ pub struct IsServer {
 }
 
 impl Drop for IsServer {
+    #[inline]
     fn drop(&mut self) {
         unsafe {
             SteamAPI_ISteamNetworkingSockets_CloseListenSocket(
@@ -269,6 +278,7 @@ impl Drop for IsServer {
 }
 
 impl IsReady for IsServer {
+    #[inline]
     fn queue(&self) -> &SegQueue<GnsConnectionEvent> {
         &self.queue
     }
@@ -319,6 +329,7 @@ impl Drop for IsClient {
 }
 
 impl IsReady for IsClient {
+    #[inline]
     fn queue(&self) -> &SegQueue<GnsConnectionEvent> {
         &self.queue
     }
@@ -356,6 +367,7 @@ pub type MessageSlot = MaybeUninit<*mut ISteamNetworkingMessage>;
 /// `slot` must have been initialized by GNS (i.e. lie within the prefix length
 /// it reported from `receive`) and must not have been taken already, otherwise
 /// the message would be released more than once.
+#[inline]
 unsafe fn take_message(slot: &MessageSlot) -> GnsNetworkMessage<ToReceive> {
     GnsNetworkMessage(unsafe { slot.assume_init() }, PhantomData)
 }
@@ -381,6 +393,7 @@ impl SlotCursor {
         }
     }
 
+    #[inline]
     fn remaining(&self) -> usize {
         self.len - self.pos
     }
@@ -412,10 +425,12 @@ pub struct ReceivedMessages<const K: usize> {
 impl<const K: usize> Iterator for ReceivedMessages<K> {
     type Item = GnsNetworkMessage<ToReceive>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.cursor.next(&self.slots)
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.cursor.remaining();
         (remaining, Some(remaining))
@@ -427,6 +442,7 @@ impl<const K: usize> ExactSizeIterator for ReceivedMessages<K> {}
 impl<const K: usize> core::iter::FusedIterator for ReceivedMessages<K> {}
 
 impl<const K: usize> Drop for ReceivedMessages<K> {
+    #[inline]
     fn drop(&mut self) {
         self.cursor.drain_unconsumed(&self.slots);
     }
@@ -447,10 +463,12 @@ pub struct ReceivedMessagesInto<'a> {
 impl Iterator for ReceivedMessagesInto<'_> {
     type Item = GnsNetworkMessage<ToReceive>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.cursor.next(self.slots)
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.cursor.remaining();
         (remaining, Some(remaining))
@@ -462,6 +480,7 @@ impl ExactSizeIterator for ReceivedMessagesInto<'_> {}
 impl core::iter::FusedIterator for ReceivedMessagesInto<'_> {}
 
 impl Drop for ReceivedMessagesInto<'_> {
+    #[inline]
     fn drop(&mut self) {
         self.cursor.drain_unconsumed(self.slots);
     }
@@ -490,6 +509,7 @@ pub struct GnsLane {
 }
 
 impl GnsLane {
+    #[inline]
     pub const fn new(priority: i32, weight: u16) -> Self {
         Self { priority, weight }
     }
@@ -550,11 +570,13 @@ extern "C" fn free_payload<P: Payload>(msg: *mut ISteamNetworkingMessage) {
 }
 
 unsafe impl Payload for Box<[u8]> {
+    #[inline]
     fn into_raw(self) -> (*mut u8, usize) {
         let len = self.len();
         let raw = Box::into_raw(self) as *mut u8;
         (raw, len)
     }
+    #[inline]
     unsafe fn from_raw(ptr: *mut u8, len: usize) -> Self {
         let slice = core::ptr::slice_from_raw_parts_mut(ptr, len);
         unsafe { Box::from_raw(slice) }
@@ -564,29 +586,35 @@ unsafe impl Payload for Box<[u8]> {
 // Routes through `Box<[u8]>`: `into_boxed_slice` shrinks-to-fit (one
 // realloc when `cap != len`) so `(ptr, len)` is enough to reconstruct.
 unsafe impl Payload for Vec<u8> {
+    #[inline]
     fn into_raw(self) -> (*mut u8, usize) {
         <Box<[u8]> as Payload>::into_raw(self.into_boxed_slice())
     }
+    #[inline]
     unsafe fn from_raw(ptr: *mut u8, len: usize) -> Self {
         unsafe { Vec::from_raw_parts(ptr, len, len) }
     }
 }
 
 unsafe impl Payload for String {
+    #[inline]
     fn into_raw(self) -> (*mut u8, usize) {
         <Vec<u8> as Payload>::into_raw(self.into_bytes())
     }
+    #[inline]
     unsafe fn from_raw(ptr: *mut u8, len: usize) -> Self {
         unsafe { String::from_raw_parts(ptr, len, len) }
     }
 }
 
 unsafe impl Payload for Arc<[u8]> {
+    #[inline]
     fn into_raw(self) -> (*mut u8, usize) {
         let len = self.len();
         let raw = Arc::into_raw(self) as *const u8 as *mut u8;
         (raw, len)
     }
+    #[inline]
     unsafe fn from_raw(ptr: *mut u8, len: usize) -> Self {
         let slice = core::ptr::slice_from_raw_parts(ptr as *const u8, len);
         unsafe { Arc::from_raw(slice) }
@@ -594,18 +622,22 @@ unsafe impl Payload for Arc<[u8]> {
 }
 
 unsafe impl Payload for &'static [u8] {
+    #[inline]
     fn into_raw(self) -> (*mut u8, usize) {
         (self.as_ptr() as *mut u8, self.len())
     }
+    #[inline]
     unsafe fn from_raw(ptr: *mut u8, len: usize) -> Self {
         unsafe { core::slice::from_raw_parts(ptr as *const u8, len) }
     }
 }
 
 unsafe impl Payload for &'static str {
+    #[inline]
     fn into_raw(self) -> (*mut u8, usize) {
         (self.as_ptr() as *mut u8, self.len())
     }
+    #[inline]
     unsafe fn from_raw(ptr: *mut u8, len: usize) -> Self {
         let bytes = unsafe { core::slice::from_raw_parts(ptr as *const u8, len) };
         unsafe { core::str::from_utf8_unchecked(bytes) }
@@ -620,6 +652,7 @@ unsafe impl Payload for &'static str {
 pub struct GnsNetworkMessage<T>(*mut ISteamNetworkingMessage, PhantomData<T>);
 
 impl<T> Drop for GnsNetworkMessage<T> {
+    #[inline]
     fn drop(&mut self) {
         if !self.0.is_null() {
             unsafe {
@@ -638,42 +671,51 @@ impl<T> GnsNetworkMessage<T> {
     /// is now their responsibility. For `ToSend` messages this also means
     /// the `Payload`-installed `m_pfnFreeData` will run when the C side
     /// releases the message.
+    #[inline]
     pub unsafe fn into_inner(self) -> *mut ISteamNetworkingMessage {
         self.0
     }
 
+    #[inline]
     pub fn payload(&self) -> &[u8] {
         unsafe {
             core::slice::from_raw_parts((*self.0).m_pData as *const u8, (*self.0).m_cbSize as _)
         }
     }
 
+    #[inline]
     pub fn message_number(&self) -> u64 {
         unsafe { (*self.0).m_nMessageNumber as _ }
     }
 
+    #[inline]
     pub fn lane(&self) -> GnsLaneId {
         unsafe { (*self.0).m_idxLane }
     }
 
+    #[inline]
     pub fn flags(&self) -> SendFlags {
         SendFlags::from_bits_retain(unsafe { (*self.0).m_nFlags })
     }
 
+    #[inline]
     pub fn user_data(&self) -> u64 {
         unsafe { (*self.0).m_nUserData as _ }
     }
 
+    #[inline]
     pub fn connection(&self) -> GnsConnection {
         GnsConnection(unsafe { (*self.0).m_conn })
     }
 
+    #[inline]
     pub fn connection_user_data(&self) -> u64 {
         unsafe { (*self.0).m_nConnUserData as _ }
     }
 }
 
 impl GnsNetworkMessage<ToSend> {
+    #[inline]
     fn new<P: Payload>(
         ptr: *mut ISteamNetworkingMessage,
         conn: GnsConnection,
@@ -691,21 +733,25 @@ impl GnsNetworkMessage<ToSend> {
             .set_connection(conn)
     }
 
+    #[inline]
     pub fn set_connection(self, GnsConnection(conn): GnsConnection) -> Self {
         unsafe { (*self.0).m_conn = conn }
         self
     }
 
+    #[inline]
     pub fn set_lane(self, lane: GnsLaneId) -> Self {
         unsafe { (*self.0).m_idxLane = lane }
         self
     }
 
+    #[inline]
     pub fn set_flags(self, flags: SendFlags) -> Self {
         unsafe { (*self.0).m_nFlags = flags.bits() as _ }
         self
     }
 
+    #[inline]
     pub fn set_user_data(self, userdata: u64) -> Self {
         unsafe { (*self.0).m_nUserData = userdata as _ }
         self
@@ -720,11 +766,13 @@ impl GnsConnection {
     /// Wrap a raw `HSteamNetConnection` handle. Validity is enforced by GNS
     /// on use; an arbitrary handle that does not match a live connection
     /// will simply be rejected by the relevant API call.
+    #[inline]
     pub const fn from_raw(handle: HSteamNetConnection) -> Self {
         Self(handle)
     }
 
     /// `true` if this is not the GNS invalid-connection sentinel (`0`).
+    #[inline]
     pub fn is_valid(self) -> bool {
         self.0 != k_HSteamNetConnection_Invalid
     }
@@ -734,20 +782,24 @@ impl GnsConnection {
 pub struct GnsConnectionInfo(SteamNetConnectionInfo_t);
 
 impl GnsConnectionInfo {
+    #[inline]
     pub fn state(&self) -> ESteamNetworkingConnectionState {
         self.0.m_eState
     }
 
+    #[inline]
     pub fn end_reason(&self) -> u32 {
         self.0.m_eEndReason as u32
     }
 
+    #[inline]
     pub fn end_debug(&self) -> &str {
         unsafe { CStr::from_ptr(self.0.m_szEndDebug.as_ptr()) }
             .to_str()
             .unwrap_or("")
     }
 
+    #[inline]
     pub fn remote_address(&self) -> IpAddr {
         let ipv4 = unsafe { self.0.m_addrRemote.__bindgen_anon_1.m_ipv4 };
         if ipv4.m_8zeros == 0 && ipv4.m_0000 == 0 && ipv4.m_ffff == 0xffff {
@@ -759,6 +811,7 @@ impl GnsConnectionInfo {
         }
     }
 
+    #[inline]
     pub fn remote_port(&self) -> u16 {
         self.0.m_addrRemote.m_port
     }
@@ -768,18 +821,22 @@ impl GnsConnectionInfo {
 pub struct GnsConnectionRealTimeLaneStatus(SteamNetConnectionRealTimeLaneStatus_t);
 
 impl GnsConnectionRealTimeLaneStatus {
+    #[inline]
     pub fn pending_bytes_unreliable(&self) -> u32 {
         self.0.m_cbPendingUnreliable as _
     }
 
+    #[inline]
     pub fn pending_bytes_reliable(&self) -> u32 {
         self.0.m_cbPendingReliable as _
     }
 
+    #[inline]
     pub fn bytes_sent_unacked_reliable(&self) -> u32 {
         self.0.m_cbSentUnackedReliable as _
     }
 
+    #[inline]
     pub fn approximated_queue_time(&self) -> Duration {
         Duration::from_micros(self.0.m_usecQueueTime as _)
     }
@@ -789,54 +846,67 @@ impl GnsConnectionRealTimeLaneStatus {
 pub struct GnsConnectionRealTimeStatus(SteamNetConnectionRealTimeStatus_t);
 
 impl GnsConnectionRealTimeStatus {
+    #[inline]
     pub fn state(&self) -> ESteamNetworkingConnectionState {
         self.0.m_eState
     }
 
+    #[inline]
     pub fn ping(&self) -> u32 {
         self.0.m_nPing as _
     }
 
+    #[inline]
     pub fn quality_local(&self) -> f32 {
         self.0.m_flConnectionQualityLocal
     }
 
+    #[inline]
     pub fn quality_remote(&self) -> f32 {
         self.0.m_flConnectionQualityRemote
     }
 
+    #[inline]
     pub fn out_packets_per_sec(&self) -> f32 {
         self.0.m_flOutPacketsPerSec
     }
 
+    #[inline]
     pub fn out_bytes_per_sec(&self) -> f32 {
         self.0.m_flOutBytesPerSec
     }
 
+    #[inline]
     pub fn in_packets_per_sec(&self) -> f32 {
         self.0.m_flInPacketsPerSec
     }
 
+    #[inline]
     pub fn in_bytes_per_sec(&self) -> f32 {
         self.0.m_flInBytesPerSec
     }
 
+    #[inline]
     pub fn send_rate_bytes_per_sec(&self) -> u32 {
         self.0.m_nSendRateBytesPerSecond as _
     }
 
+    #[inline]
     pub fn pending_bytes_unreliable(&self) -> u32 {
         self.0.m_cbPendingUnreliable as _
     }
 
+    #[inline]
     pub fn pending_bytes_reliable(&self) -> u32 {
         self.0.m_cbPendingReliable as _
     }
 
+    #[inline]
     pub fn bytes_sent_unacked_reliable(&self) -> u32 {
         self.0.m_cbSentUnackedReliable as _
     }
 
+    #[inline]
     pub fn approximated_queue_time(&self) -> Duration {
         Duration::from_micros(self.0.m_usecQueueTime as _)
     }
@@ -847,6 +917,7 @@ impl GnsConnectionRealTimeStatus {
     ///
     /// Returns `None` if no jitter data is available (the underlying value is negative),
     /// or if the connection type doesn't support jitter measurement.
+    #[inline]
     pub fn max_jitter_usec(&self) -> Option<i32> {
         let val = self.0.m_usecMaxJitter;
         if val < 0 {
@@ -861,14 +932,17 @@ impl GnsConnectionRealTimeStatus {
 pub struct GnsConnectionEvent(SteamNetConnectionStatusChangedCallback_t);
 
 impl GnsConnectionEvent {
+    #[inline]
     pub fn old_state(&self) -> ESteamNetworkingConnectionState {
         self.0.m_eOldState
     }
 
+    #[inline]
     pub fn connection(&self) -> GnsConnection {
         GnsConnection(self.0.m_hConn)
     }
 
+    #[inline]
     pub fn info(&self) -> GnsConnectionInfo {
         GnsConnectionInfo(self.0.m_info)
     }
@@ -1128,6 +1202,7 @@ impl GnsSocket<IsCreated> {
     }
 
     /// Initialize a new socket in [`IsCreated`] state.
+    #[inline]
     pub fn new(global: &'static GnsGlobal) -> Self {
         GnsSocket {
             global,
@@ -1257,6 +1332,7 @@ impl GnsSocket<IsServer> {
 
 impl GnsSocket<IsClient> {
     /// Return the socket connection. This operation is available only if the socket is in the [`IsClient`] state.
+    #[inline]
     pub fn connection(&self) -> GnsConnection {
         self.state.connection
     }
@@ -1320,6 +1396,7 @@ impl GnsUtils {
     /// The buffer is held until GNS releases the message, at which point
     /// the wrapper reconstructs `P` via [`Payload::from_raw`] and lets
     /// its `Drop` run. Zero-copy for already-owned heap buffers.
+    #[inline]
     pub fn allocate_message<P: Payload>(
         &self,
         conn: GnsConnection,
