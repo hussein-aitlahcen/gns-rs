@@ -28,9 +28,9 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       - &use-nix
         name: Setup | Use Nix
-        uses: rrbutani/use-nix-shell-action@59a52b2
+        uses: rrbutani/use-nix-shell-action@59a52b2b9bbfe3cc0e7deb8f9059abe37a439edf
       - name: Release
-        uses: release-plz/action@064f4d1
+        uses: release-plz/action@064f4d1e36c843611ddf013be726beaa4ad804db
         with:
           command: release
         env:
@@ -52,7 +52,7 @@ jobs:
       - *install-nix
       - *use-nix
       - name: Release PR
-        uses: release-plz/action@064f4d1
+        uses: release-plz/action@064f4d1e36c843611ddf013be726beaa4ad804db
         with:
           command: release-pr
         env:
