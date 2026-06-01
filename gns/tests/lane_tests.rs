@@ -2,7 +2,7 @@
 //! These tests verify the lane configuration functionality for prioritizing different types of traffic
 
 use gns::sys::*;
-use gns::{GnsGlobal, GnsLane, GnsSocket};
+use gns::{GnsGlobal, GnsLane, GnsSocket, SendFlags};
 
 use std::{
     collections::HashMap,
@@ -12,10 +12,13 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod common;
+use common::free_port;
+
 #[test]
 fn test_connection_lane_configuration() {
     // Setup test data
-    let port = 55010;
+    let port = free_port();
     let lane_count = 3;
 
     // Define three lanes with different priorities and weights
@@ -23,9 +26,9 @@ fn test_connection_lane_configuration() {
     // Lane 1: Medium priority, medium weight
     // Lane 2: Low priority (high number), high weight
     let lanes: Vec<GnsLane> = vec![
-        (0, 1),   // High priority, low weight
-        (10, 5),  // Medium priority, medium weight
-        (20, 10), // Low priority, high weight
+        GnsLane::new(0, 1),   // High priority, low weight
+        GnsLane::new(10, 5),  // Medium priority, medium weight
+        GnsLane::new(20, 10), // Low priority, high weight
     ];
 
     // Message tracking
@@ -48,7 +51,7 @@ fn test_connection_lane_configuration() {
         let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
 
         // Create server socket
-        let server = GnsSocket::new(gns_global.clone())
+        let server = GnsSocket::new(gns_global)
             .listen(Ipv4Addr::LOCALHOST.into(), port)
             .expect("Failed to create server socket");
 
@@ -62,7 +65,7 @@ fn test_connection_lane_configuration() {
             gns_global.poll_callbacks();
 
             // Process connection events
-            server.poll_event::<100>(|event| {
+            for event in server.receive_events() {
                 match (event.old_state(), event.info().state()) {
                     // New connection
                     (
@@ -81,15 +84,15 @@ fn test_connection_lane_configuration() {
                         if Some(event.connection()) == client_connection {
                             client_connection = None;
                         }
-                        server.close_connection(event.connection(), 0, "", false);
+                        let _ = server.close_connection(event.connection(), 0, None, false);
                     },
 
                     _ => {}
                 }
-            });
+            }
 
             // Process messages and record which lane they were received on
-            server.poll_messages::<100>(|message| {
+            for message in server.receive_messages::<100>().expect("receive_messages failed") {
                 let payload =
                     std::str::from_utf8(message.payload()).expect("Failed to decode message");
 
@@ -98,7 +101,7 @@ fn test_connection_lane_configuration() {
                     let lane = message.lane();
                     server_messages_clone.lock().unwrap().push((msg_idx, lane));
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -118,7 +121,7 @@ fn test_connection_lane_configuration() {
         let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
 
         // Create client socket
-        let client = GnsSocket::new(gns_global.clone())
+        let client = GnsSocket::new(gns_global)
             .connect(Ipv4Addr::LOCALHOST.into(), port)
             .expect("Failed to create client socket");
 
@@ -128,12 +131,12 @@ fn test_connection_lane_configuration() {
         while !connected && start_time.elapsed() < Duration::from_secs(5) {
             gns_global.poll_callbacks();
 
-            client.poll_event::<100>(|event| {
+            for event in client.receive_events() {
                 if event.old_state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting
                    && event.info().state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connected {
                     connected = true;
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -154,15 +157,14 @@ fn test_connection_lane_configuration() {
             // Determine which lane to use for this message (round-robin)
             let lane_idx = i % lane_count;
 
-            // Create message for the appropriate lane
-            let message = gns_global.utils().allocate_message(
-                client.connection(),
-                k_nSteamNetworkingSend_Reliable,
-                format!("Message {}", i).as_bytes(),
-            );
-
-            // Set the lane
-            let message = message.set_lane(lane_idx as u16);
+            let message = gns_global
+                .utils()
+                .allocate_message(
+                    client.connection(),
+                    SendFlags::RELIABLE,
+                    format!("Message {}", i),
+                )
+                .set_lane(lane_idx as u16);
 
             // Send the message
             client.send_messages(vec![message]);
@@ -263,7 +265,7 @@ fn test_connection_lane_configuration() {
 #[test]
 fn test_get_connection_real_time_lane_status() {
     // Setup test data
-    let port = 55011;
+    let port = free_port();
 
     // Number of lanes for assertions
     let lane_count = 2;
@@ -294,12 +296,12 @@ fn test_get_connection_real_time_lane_status() {
 
         // Server lanes configuration
         let server_lanes: Vec<GnsLane> = vec![
-            (0, 1),  // High priority, low weight
-            (10, 5), // Low priority, high weight
+            GnsLane::new(0, 1),  // High priority, low weight
+            GnsLane::new(10, 5), // Low priority, high weight
         ];
 
         // Create server socket
-        let server = GnsSocket::new(gns_global.clone())
+        let server = GnsSocket::new(gns_global)
             .listen(Ipv4Addr::LOCALHOST.into(), port)
             .expect("Failed to create server socket");
 
@@ -311,7 +313,7 @@ fn test_get_connection_real_time_lane_status() {
             gns_global.poll_callbacks();
 
             // Process connection events
-            server.poll_event::<100>(|event| {
+            for event in server.receive_events() {
                 match (event.old_state(), event.info().state()) {
                     // New connection
                     (
@@ -331,7 +333,7 @@ fn test_get_connection_real_time_lane_status() {
                         if Some(event.connection()) == *conn {
                             *conn = None;
                         }
-                        server.close_connection(event.connection(), 0, "", false);
+                        let _ = server.close_connection(event.connection(), 0, None, false);
                     },
 
                     // Client is now connected
@@ -352,7 +354,7 @@ fn test_get_connection_real_time_lane_status() {
 
                     _ => {}
                 }
-            });
+            }
 
             // Periodically check lane status if we have a client
             if let Some(conn) = *client_conn_clone.lock().unwrap() {
@@ -383,12 +385,12 @@ fn test_get_connection_real_time_lane_status() {
 
         // Client lanes configuration
         let client_lanes: Vec<GnsLane> = vec![
-            (0, 1),  // High priority, low weight
-            (10, 5), // Low priority, high weight
+            GnsLane::new(0, 1),  // High priority, low weight
+            GnsLane::new(10, 5), // Low priority, high weight
         ];
 
         // Create client socket
-        let client = GnsSocket::new(gns_global.clone())
+        let client = GnsSocket::new(gns_global)
             .connect(Ipv4Addr::LOCALHOST.into(), port)
             .expect("Failed to create client socket");
 
@@ -398,12 +400,12 @@ fn test_get_connection_real_time_lane_status() {
         while !connected && start_time.elapsed() < Duration::from_secs(5) {
             gns_global.poll_callbacks();
 
-            client.poll_event::<100>(|event| {
+            for event in client.receive_events() {
                 if event.old_state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting
                    && event.info().state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connected {
                     connected = true;
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -423,15 +425,14 @@ fn test_get_connection_real_time_lane_status() {
             // Alternate between lanes
             let lane_idx = i % 2;
 
-            // Create message for the appropriate lane
-            let message = gns_global.utils().allocate_message(
-                client.connection(),
-                k_nSteamNetworkingSend_Reliable,
-                format!("Lane Test Message {}", i).as_bytes(),
-            );
-
-            // Set the lane
-            let message = message.set_lane(lane_idx as u16);
+            let message = gns_global
+                .utils()
+                .allocate_message(
+                    client.connection(),
+                    SendFlags::RELIABLE,
+                    format!("Lane Test Message {}", i),
+                )
+                .set_lane(lane_idx as u16);
 
             // Send the message
             client.send_messages(vec![message]);

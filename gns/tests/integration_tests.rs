@@ -3,7 +3,7 @@
 //! using the gns library.
 
 use gns::sys::*;
-use gns::{GnsGlobal, GnsSocket};
+use gns::{GnsGlobal, GnsSocket, MessageSlot, SendFlags};
 
 use std::{
     collections::HashSet,
@@ -12,6 +12,9 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+
+mod common;
+use common::free_port;
 
 /// Helper function to setup and run a server
 fn run_server(
@@ -25,7 +28,7 @@ fn run_server(
         let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
 
         // Create server socket
-        let server = GnsSocket::new(gns_global.clone())
+        let server = GnsSocket::new(gns_global)
             .listen(Ipv4Addr::LOCALHOST.into(), port)
             .expect("Failed to create server socket");
 
@@ -35,13 +38,17 @@ fn run_server(
         // Connected clients
         let mut clients = HashSet::new();
 
+        // Reused receive buffer: allocated once and borrowed by
+        // `receive_messages_into` each tick (the zero-move polling pattern).
+        let mut recv_buf = [const { MessageSlot::uninit() }; 100];
+
         // Main server loop
         while !*server_done.lock().unwrap() {
             // Poll callbacks
             gns_global.poll_callbacks();
 
             // Process connection events
-            server.poll_event::<100>(|event| {
+            for event in server.receive_events() {
                 match (event.old_state(), event.info().state()) {
                     // New connection
                     (
@@ -58,31 +65,33 @@ fn run_server(
                     (_, ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_ClosedByPeer
                     | ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_ProblemDetectedLocally) => {
                         clients.remove(&event.connection());
-                        server.close_connection(event.connection(), 0, "", false);
+                        let _ = server.close_connection(event.connection(), 0, None, false);
                     },
 
                     _ => {}
                 }
-            });
+            }
 
             // Process messages
-            server.poll_messages::<100>(|message| {
+            for message in server
+                .receive_messages_into(&mut recv_buf)
+                .expect("receive_messages_into failed")
+            {
                 let msg = std::str::from_utf8(message.payload())
                     .expect("Failed to decode message")
                     .to_string();
 
                 messages_received.lock().unwrap().push(msg.clone());
 
-                // Echo message back to all clients
                 for client in &clients {
                     let echo_msg = gns_global.utils().allocate_message(
                         *client,
-                        k_nSteamNetworkingSend_Reliable,
-                        format!("ECHO: {}", msg).as_bytes(),
+                        SendFlags::RELIABLE,
+                        format!("ECHO: {}", msg),
                     );
                     server.send_messages(vec![echo_msg]);
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -102,7 +111,7 @@ fn run_client(
         let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
 
         // Create client socket
-        let client = GnsSocket::new(gns_global.clone())
+        let client = GnsSocket::new(gns_global)
             .connect(Ipv4Addr::LOCALHOST.into(), port)
             .expect("Failed to create client socket");
 
@@ -112,12 +121,12 @@ fn run_client(
         while !connected && start_time.elapsed() < Duration::from_secs(5) {
             gns_global.poll_callbacks();
 
-            client.poll_event::<100>(|event| {
+            for event in client.receive_events() {
                 if event.old_state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting
                    && event.info().state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connected {
                     connected = true;
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -129,11 +138,10 @@ fn run_client(
 
         // Send messages
         for msg in messages_to_send {
-            let message = gns_global.utils().allocate_message(
-                client.connection(),
-                k_nSteamNetworkingSend_Reliable,
-                msg.as_bytes(),
-            );
+            let message =
+                gns_global
+                    .utils()
+                    .allocate_message(client.connection(), SendFlags::RELIABLE, msg);
             client.send_messages(vec![message]);
             thread::sleep(Duration::from_millis(50));
         }
@@ -142,13 +150,13 @@ fn run_client(
         while !*client_done.lock().unwrap() {
             gns_global.poll_callbacks();
 
-            client.poll_messages::<100>(|message| {
+            for message in client.receive_messages::<100>().expect("receive_messages failed") {
                 let msg = std::str::from_utf8(message.payload())
                     .expect("Failed to decode message")
                     .to_string();
 
                 messages_received.lock().unwrap().push(msg);
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -158,7 +166,7 @@ fn run_client(
 #[test]
 fn test_single_client_message_exchange() {
     // Setup test data
-    let port = 55001;
+    let port = free_port();
     let test_message = "Hello, server!".to_string();
     let expected_echo = "ECHO: Hello, server!".to_string();
 
@@ -240,7 +248,7 @@ fn test_single_client_message_exchange() {
 #[test]
 fn test_multiple_clients_broadcast() {
     // Setup test data
-    let port = 55002;
+    let port = free_port();
     let client1_message = "Hello from client 1!".to_string();
     let client2_message = "Hello from client 2!".to_string();
 
@@ -338,7 +346,7 @@ fn test_multiple_clients_broadcast() {
 #[test]
 fn test_client_connection_and_disconnection() {
     // Setup test data
-    let port = 55003;
+    let port = free_port();
 
     // Track connection events
     let connection_events = Arc::new(Mutex::new(Vec::<(
@@ -359,7 +367,7 @@ fn test_client_connection_and_disconnection() {
         let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
 
         // Create server socket
-        let server = GnsSocket::new(gns_global.clone())
+        let server = GnsSocket::new(gns_global)
             .listen(Ipv4Addr::LOCALHOST.into(), port)
             .expect("Failed to create server socket");
 
@@ -371,25 +379,22 @@ fn test_client_connection_and_disconnection() {
             gns_global.poll_callbacks();
 
             // Process connection events
-            server.poll_event::<100>(|event| {
+            for event in server.receive_events() {
                 // Record connection state changes
-                connection_events_clone.lock().unwrap().push((
-                    event.old_state(),
-                    event.info().state(),
-                ));
+                connection_events_clone
+                    .lock()
+                    .unwrap()
+                    .push((event.old_state(), event.info().state()));
 
-                match (event.old_state(), event.info().state()) {
-                    // New connection
-                    (
-                        ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_None,
-                        ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting,
-                    ) => {
-                        let result = server.accept(event.connection());
-                        assert!(result.is_ok(), "Failed to accept connection");
-                    },
-                    _ => {}
+                if let (
+                    ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_None,
+                    ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting,
+                ) = (event.old_state(), event.info().state())
+                {
+                    let result = server.accept(event.connection());
+                    assert!(result.is_ok(), "Failed to accept connection");
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -404,7 +409,7 @@ fn test_client_connection_and_disconnection() {
         let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global for client");
 
         // Create client socket
-        let client = GnsSocket::new(gns_global.clone())
+        let client = GnsSocket::new(gns_global)
             .connect(Ipv4Addr::LOCALHOST.into(), port)
             .expect("Failed to create client socket");
 
@@ -414,12 +419,12 @@ fn test_client_connection_and_disconnection() {
         while !connected && start_time.elapsed() < Duration::from_secs(5) {
             gns_global.poll_callbacks();
 
-            client.poll_event::<100>(|event| {
+            for event in client.receive_events() {
                 if event.old_state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting
                    && event.info().state() == ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connected {
                     connected = true;
                 }
-            });
+            }
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -462,15 +467,15 @@ fn test_client_connection_and_disconnection() {
     // Allow some time for the server to clean up
     thread::sleep(Duration::from_millis(500));
 
-    // For this test, we'll consider it a success if we get here without hanging
-    // Different environments might have slightly different connection states when disconnecting
-    assert!(true, "Test completed");
+    // Different environments end up in slightly different connection states
+    // on disconnect; reaching this point without hanging is the only thing
+    // we can portably assert.
 }
 
 #[test]
 fn test_message_reliability() {
     // Setup test data
-    let port = 55004;
+    let port = free_port();
     let message_count = 50;
     let test_messages: Vec<String> = (0..message_count)
         .map(|i| format!("Test message {}", i))

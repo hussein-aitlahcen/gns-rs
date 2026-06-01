@@ -3,7 +3,10 @@ use gns::*;
 use std::{
     collections::HashMap,
     net::Ipv4Addr,
-    sync::mpsc::{self, Receiver},
+    sync::{
+        mpsc::{self, Receiver},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -11,9 +14,10 @@ use std::{
 
 fn server(port: u16) {
     // Initialize valve GameNetworkingSocket library and get a reference.
-    // **unwrap** must be banned in production.
-    let gns_global = GnsGlobal::get().unwrap();
-    
+    let gns_global = GnsGlobal::get()
+        // **unwrap** must be banned in production.
+        .unwrap();
+
     // Setup debugging to log everything.
     // The current rust implementation flush the log in stdout.
     gns_global.utils().enable_debug_output(
@@ -22,13 +26,13 @@ fn server(port: u16) {
     );
 
     // Add fake 1000ms ping to everyone connecting.
-    // **unwrap** must be banned in production.
     gns_global
         .utils()
         .set_global_config_value(
             ESteamNetworkingConfigValue::k_ESteamNetworkingConfig_FakePacketLag_Recv,
             GnsConfig::Int32(1000),
         )
+        // **unwrap** must be banned in production.
         .unwrap();
 
     // Minimalistic server state.
@@ -41,7 +45,7 @@ fn server(port: u16) {
     // Note that GnsSocket implement drop for both server/client.
     // For the server, the listen socket + poll group are closed/cleaned up.
     // For the client, the connection is closed.
-    let server = GnsSocket::new(gns_global.clone())
+    let server = GnsSocket::new(gns_global)
         .listen(Ipv4Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
@@ -55,10 +59,14 @@ fn server(port: u16) {
         if elapsed.as_secs() > 10 {
             last_update = now;
             for (client, nick) in connected_clients.clone().into_iter() {
-                // **unwrap** must be banned in production.
-                let info = server.get_connection_info(client).unwrap();
-                // **unwrap** must be banned in production.
-                let (status, _) = server.get_connection_real_time_status(client, 0).unwrap();
+                let info = server
+                    .get_connection_info(client)
+                    // **unwrap** must be banned in production.
+                    .unwrap();
+                let (status, _) = server
+                    .get_connection_real_time_status(client, 0)
+                    // **unwrap** must be banned in production.
+                    .unwrap();
                 println!(
                   "== Client {:#?}\n\tIP: {:#?}\n\tPing: {:#?}\n\tOut/sec: {:#?}\n\tIn/sec: {:#?}",
                     nick,
@@ -76,14 +84,15 @@ fn server(port: u16) {
         // Broadcast a message to the provided clients.
         // We first build a list of messages and then send them.
         let broadcast_chat = |clients: Vec<GnsConnection>, title: &str, content: &str| {
+            let content: Arc<[u8]> = format!("[{}]: {}", title, content).into_bytes().into();
             let messages = clients
                 .clone()
                 .into_iter()
                 .map(|client| {
                     gns_global.utils().allocate_message(
                         client,
-                        k_nSteamNetworkingSend_Reliable,
-                        format!("[{}]: {}", title, content).as_bytes(),
+                        SendFlags::RELIABLE,
+                        Arc::clone(&content),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -92,7 +101,7 @@ fn server(port: u16) {
         };
 
         // Process connections events.
-        let _events_processed = server.poll_event::<100>(|event| {
+        for event in server.receive_events() {
           match (event.old_state(), event.info().state()) {
             // A client is about to connect, accept it.
             (
@@ -133,7 +142,7 @@ fn server(port: u16) {
               );
               connected_clients.remove(&conn);
               // Make sure we cleanup the connection, mandatory as per GNS doc.
-              server.close_connection(conn, 0, "", false);
+              let _ = server.close_connection(conn, 0, None, false);
             }
 
             // A client state is changing, perhaps disconnecting
@@ -142,21 +151,22 @@ fn server(port: u16) {
               println!("GnsSocket<Server>: {:#?} => {:#?}.", previous, current);
             }
           }
-        });
+        }
 
         // Process some messages, we arbitrary define 100 as being the max number of messages we can handle per iteration.
-        let _messages_processed = server.poll_messages::<100>(|message| {
-            // **unwrap** must be banned in production.
-            let chat_message = core::str::from_utf8(message.payload()).unwrap();
+        for message in server.receive_messages::<100>().into_iter().flatten() {
+            let chat_message = core::str::from_utf8(message.payload())
+                // **unwrap** must be banned in production.
+                .unwrap();
             println!("Boarcasting {}", chat_message);
             let sender = message.connection();
             let sender_nickname = &connected_clients[&sender];
             broadcast_chat(
                 connected_clients.keys().copied().collect(),
-                &sender_nickname,
+                sender_nickname,
                 chat_message,
             );
-        });
+        }
 
         std::thread::sleep(Duration::from_millis(10))
     }
@@ -166,25 +176,30 @@ fn user_input() -> Receiver<String> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || loop {
         let mut line = String::new();
-        // **unwrap** must be banned in production.
-        std::io::stdin().read_line(&mut line).unwrap();
-        // **unwrap** must be banned in production.
-        tx.send(line).unwrap();
+        std::io::stdin()
+            .read_line(&mut line)
+            // **unwrap** must be banned in production.
+            .unwrap();
+        tx.send(line)
+            // **unwrap** must be banned in production.
+            .unwrap();
     });
     rx
 }
 
 // Everything is pretty similar to the server.
 fn client(port: u16) {
-    // **unwrap** must be banned in production.
-    let gns_global = GnsGlobal::get().unwrap();
-    
+    let gns_global = GnsGlobal::get()
+        // **unwrap** must be banned in production.
+        .unwrap();
+
+    println!("enable debug");
     gns_global.utils().enable_debug_output(
         ESteamNetworkingSocketsDebugOutputType::k_ESteamNetworkingSocketsDebugOutputType_Everything,
         |ty, message| println!("{:#?}: {}", ty, message),
     );
 
-    let client = GnsSocket::new(gns_global.clone())
+    let client = GnsSocket::new(gns_global)
         .connect(Ipv4Addr::LOCALHOST.into(), port)
         // **unwrap** must be banned in production.
         .unwrap();
@@ -195,17 +210,18 @@ fn client(port: u16) {
         gns_global.poll_callbacks();
 
         // Process some messages, we arbitrary define 100 as being the max number of messages we can handle per iteration.
-        let _messages_processed = client.poll_messages::<100>(|message| {
+        for message in client.receive_messages::<100>().into_iter().flatten() {
             println!(
                 "(Chat) {}",
-                // **unwrap** must be banned in production.
-                core::str::from_utf8(message.payload()).unwrap()
+                core::str::from_utf8(message.payload())
+                    // **unwrap** must be banned in production.
+                    .unwrap()
             );
-        });
+        }
 
         let mut quit = false;
-        let _ =
-            client.poll_event::<100>(|event| match (event.old_state(), event.info().state()) {
+        for event in client.receive_events() {
+            match (event.old_state(), event.info().state()) {
                 (
                     ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_None,
                     ESteamNetworkingConnectionState::k_ESteamNetworkingConnectionState_Connecting,
@@ -226,8 +242,8 @@ fn client(port: u16) {
                 (previous, current) => {
                     println!("GnsSocket<Client>: {:#?} => {:#?}.", previous, current);
                 }
-
-            });
+            }
+        }
         if quit {
             break 'a;
         }
@@ -237,11 +253,11 @@ fn client(port: u16) {
             if input == "quit" {
                 break 'a;
             }
-            client.send_messages(vec![gns_global.utils().allocate_message(
+            let _ = client.send_message(gns_global.utils().allocate_message(
                 client.connection(),
-                k_nSteamNetworkingSend_Reliable,
-                input.as_bytes(),
-            )]);
+                SendFlags::RELIABLE,
+                input.as_bytes().to_vec(),
+            ));
         }
 
         std::thread::sleep(Duration::from_millis(10))
