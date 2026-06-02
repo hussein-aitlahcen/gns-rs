@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          submodules: true
+          submodules: recursive
       - &install-nix
         name: Setup | Install Nix
         uses: cachix/install-nix-action@v31
@@ -29,6 +29,8 @@ jobs:
       - &use-nix
         name: Setup | Use Nix
         uses: rrbutani/use-nix-shell-action@59a52b2b9bbfe3cc0e7deb8f9059abe37a439edf
+        with:
+          extraNixOptions: "-L"
       - name: Release
         uses: release-plz/action@064f4d1e36c843611ddf013be726beaa4ad804db
         with:

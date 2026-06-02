@@ -3,6 +3,8 @@
 release = false
 # only release when the release pr is merged
 release_always = false
+# there's some issues with gns-sys submodules that present as dirty when they're really not, so this is required
+allow_dirty = true
 
 [[package]]
 name = "game-networking-sockets"
