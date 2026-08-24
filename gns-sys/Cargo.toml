@@ -37,6 +37,10 @@ include = [
 [lib]
 name = "gns_sys"
 crate-type = ["rlib", "staticlib"]
+# The bindings are generated; bindgen turns C++ member comments into Rust
+# doctests that do not compile (e.g. the expression documenting
+# `SteamNetConnectionRealTimeStatus_t::m_usecQueueTime`).
+doctest = false
 
 [build-dependencies]
 bindgen = "0.70"
