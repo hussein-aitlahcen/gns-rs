@@ -1,5 +1,8 @@
-//! Tests for GNS connection lane configuration and quality of service
-//! These tests verify the lane configuration functionality for prioritizing different types of traffic
+//! Tests for connection lanes.
+//!
+//! Lanes let you give some traffic a higher priority than other traffic. These
+//! tests check that the wrapper configures them and reports the lane that each
+//! message arrived on.
 
 use gns::sys::*;
 use gns::{GnsGlobal, GnsLane, GnsSocket, SendFlags};
@@ -92,7 +95,10 @@ fn test_connection_lane_configuration() {
             }
 
             // Process messages and record which lane they were received on
-            for message in server.receive_messages::<100>().expect("receive_messages failed") {
+            for message in server
+                .receive_messages::<100>()
+                .expect("receive_messages failed")
+            {
                 let payload =
                     std::str::from_utf8(message.payload()).expect("Failed to decode message");
 
@@ -356,7 +362,7 @@ fn test_get_connection_real_time_lane_status() {
                 }
             }
 
-            // Periodically check lane status if we have a client
+            // Check the lane status now and then, once a client is present.
             if let Some(conn) = *client_conn_clone.lock().unwrap() {
                 if let Ok((status, lane_status)) =
                     server.get_connection_real_time_status(conn, lane_count as u32)
@@ -460,12 +466,12 @@ fn test_get_connection_real_time_lane_status() {
     // Allow time for threads to clean up
     thread::sleep(Duration::from_millis(500));
 
-    // Verify we got lane status readings
+    // Check that the loop collected lane status readings.
     let readings = lane_status_readings.lock().unwrap();
 
     assert!(!readings.is_empty(), "No lane status readings collected");
 
-    // Check that we got the expected number of lane status values
+    // Check that each reading has one status value per lane.
     if let Some((_, lane_statuses)) = readings.last() {
         assert_eq!(
             lane_statuses.len(),

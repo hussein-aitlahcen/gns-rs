@@ -3,37 +3,38 @@
 [![Crates.io](https://img.shields.io/crates/v/game-networking-sockets.svg)](https://crates.io/crates/game-networking-sockets)
 [![Docs](https://docs.rs/game-networking-sockets/badge.svg)](https://docs.rs/game-networking-sockets)
 
-Simple, high-level and (somehow) type-safe wrapper for [Valve GameNetworkingSockets](https://github.com/ValveSoftware/GameNetworkingSockets).
+A simple, high-level, type-safe wrapper for [Valve GameNetworkingSockets](https://github.com/ValveSoftware/GameNetworkingSockets).
 
-- [**Have a quick look at the reliable chat client/server implementation**](./example/src/main.rs)
+- [**Read the reliable chat client and server example**](./example/src/main.rs)
 
-The library does not require your application to be running with Steam and this wrapper is intended to wrap the open-source version only.
+Your application does not need to run under Steam. This wrapper targets the open-source version of the library only.
 
-Some features might be missing, if you are interested to introduce more abstraction, feel free to open a PR/Issue.
+Some features are still missing. If you want to add more, open an issue or a pull request.
 
-Libraries:
-- `gns-sys` is the C++ library from Valve compiled with bindings generated (the library is directly compiled by cargo so you don't need to have it already installed).
-- `gns` is the high level, type-safe Rust wrapper.
+This repository contains two crates:
+
+- `gns-sys` builds Valve's C++ library and generates the bindings for it. Cargo
+  compiles the C++ library for you, so you do not need to install it first.
+- `gns` is the high-level, type-safe Rust wrapper.
 
 ## Building
 
-A few system libraries/tools are required in order to compile the C++ library as part of `gns-sys`.
+Building `gns-sys` compiles the C++ library, which needs a few system libraries and tools.
 
-System libraries required:
+You need these system libraries:
 - `clang`
 - `protobuf`
 - `openssl`
-- `abseil` (if using a recent version of protobuf)
+- `abseil`, if you use a recent version of protobuf
 
-Tools required to be in $PATH:
+You need these tools in your `$PATH`:
 - `git`
 - `protobuf-compiler`
 
 ### Windows
 
-Building on Windows uses [vcpkg](https://github.com/microsoft/vcpkg) in manifest mode to gather and
-build dependencies. As such, the only requirement on Windows is to have `clang` installed and `git`
-available in $PATH.
+On Windows the build uses [vcpkg](https://github.com/microsoft/vcpkg) in manifest mode to gather and
+build the dependencies. You only need `clang` installed and `git` available in your `$PATH`.
 
 ### macOS
 
@@ -44,12 +45,13 @@ available in $PATH.
 brew install openssl@3 protobuf@21
 ```
 
-- Verify you’re using Protobuf 21.x:
+- Check that you are using Protobuf 21.x:
 ```bash
 protoc --version   # should print 3.21.x
 ```
 
-- If you see errors like “no member named ‘c_str’ in ‘std::string_view’”, you’re likely picking up a newer Protobuf. Either unlink the newer one or point CMake to 21.x:
+- An error such as `no member named 'c_str' in 'std::string_view'` means the build picked up a newer
+  Protobuf. Either unlink the newer version or point CMake at 21.x:
 ```bash
 # Only if needed
 brew unlink protobuf
@@ -58,4 +60,4 @@ brew link --overwrite protobuf@21   # add --force if keg-only warns
 
 #### Intel
 
-Untested on Intel.
+Not tested on Intel.

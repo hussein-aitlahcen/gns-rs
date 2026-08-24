@@ -1,5 +1,7 @@
-//! Tests for GNS configuration and debug output
-//! These tests verify the configuration and debug capabilities of the GNS library
+//! Tests for configuration and debug output.
+//!
+//! These tests check that the wrapper sets configuration values and message
+//! flags correctly.
 
 use gns::sys::*;
 use gns::{GnsConfig, GnsGlobal, GnsSocket, SendFlags};
@@ -90,8 +92,8 @@ fn test_connection_info() {
     // Create a connection object
     let conn = gns::GnsConnection::default();
 
-    // Just check that the get_connection_info function exists and doesn't crash
-    // We expect it to return None for a default connection
+    // Check that get_connection_info does not crash and returns None for a
+    // default connection.
     let info = GnsSocket::new(gns_global)
         .listen(Ipv4Addr::LOCALHOST.into(), free_port())
         .expect("Failed to create server socket")

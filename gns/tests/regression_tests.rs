@@ -1,7 +1,8 @@
-//! Regression tests for fixes that would otherwise silently rot:
-//! - `event_queues` cleanup on socket drop (PR1.3)
-//! - `GnsError::Listen` returned on port collision
-//! - `GnsError::Config` returned on interior-NUL config strings
+//! Regression tests for fixes that could otherwise break again unnoticed:
+//!
+//! - a dropped socket removes its entry from `event_queues`,
+//! - a port collision returns `GnsError::Listen`, and
+//! - a config string with a NUL byte inside returns `GnsError::Config`.
 
 use gns::sys::*;
 use gns::{GnsConfig, GnsError, GnsGlobal, GnsSocket};
@@ -12,15 +13,15 @@ use std::sync::Mutex;
 mod common;
 use common::free_port;
 
-/// Tests in this file all touch the shared `GnsGlobal` singleton (queue
-/// counts, listen-port state, debug callback). Cargo runs `#[test]`s
-/// inside one binary in parallel by default — serialize them so the
-/// counts/state asserts don't race against neighbours in the same file.
+/// Every test in this file touches the shared `GnsGlobal` singleton, such as
+/// the queue count, the listen-port state, and the debug callback. Cargo runs
+/// the tests in one binary in parallel by default, so this lock runs them one
+/// at a time and keeps their assertions from racing each other.
 static SUITE_LOCK: Mutex<()> = Mutex::new(());
 
-/// Creating and dropping N sockets must not leak entries in
-/// `GnsGlobal::event_queues`. The map's size before and after the loop
-/// must be equal.
+/// Creating and dropping sockets must not leave entries behind in
+/// `GnsGlobal::event_queues`. The map must be the same size before and after
+/// the loop.
 #[test]
 fn test_event_queues_cleanup_on_socket_drop() {
     let _guard = SUITE_LOCK.lock().unwrap();
@@ -58,8 +59,8 @@ fn test_listen_returns_listen_error_on_port_collision() {
     }
 }
 
-/// A `GnsConfig::String` containing an interior NUL must surface as
-/// `GnsError::Config("interior NUL")` rather than panicking inside
+/// A `GnsConfig::String` that contains a NUL byte must return
+/// `GnsError::Config("interior NUL")` instead of panicking inside
 /// `CString::new`.
 #[test]
 fn test_config_string_interior_nul_surfaces_as_error() {
@@ -77,8 +78,8 @@ fn test_config_string_interior_nul_surfaces_as_error() {
     }
 }
 
-/// `GnsConfig::CStr` zero-allocation path: a static `c"..."` literal must
-/// be accepted without going through `CString::new`.
+/// `GnsConfig::CStr` must accept a static `c"..."` literal directly, without
+/// allocating a `CString`.
 #[test]
 fn test_config_cstr_zero_alloc_path() {
     let _guard = SUITE_LOCK.lock().unwrap();
