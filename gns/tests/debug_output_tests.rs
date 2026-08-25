@@ -1,5 +1,6 @@
-//! Verifies that `enable_debug_output` accepts a *capturing* closure (not just
-//! a bare `fn` pointer) and actually invokes it from GNS's service thread.
+//! Tests that `enable_debug_output` accepts a closure that captures state, not
+//! only a bare `fn` pointer, and that GameNetworkingSockets calls it from its
+//! service thread.
 
 use gns::sys::*;
 use gns::{GnsGlobal, GnsSocket};

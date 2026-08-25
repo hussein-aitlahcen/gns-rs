@@ -193,7 +193,7 @@ fn link_stdlib() {
     let target_vendor = std::env::var("CARGO_CFG_TARGET_VENDOR").unwrap();
 
     if &target_os == "windows" && &target_env == "msvc" {
-        // No stdlib linking needed for MSVC
+        // MSVC needs no explicit stdlib linking.
     } else if &target_vendor == "apple"
         || &target_os == "freebsd"
         || &target_os == "openbsd"
@@ -229,7 +229,7 @@ fn git_clone(repo_url: &str, dst: &Path, commit: Option<&str>) {
         false
     };
     if !exists {
-        // Repo not created yet, clone it
+        // The repository does not exist yet, so clone it.
         assert_cmd(
             Command::new("git")
                 .args(["clone", repo_url])
@@ -336,8 +336,8 @@ fn main() {
         .expect("Couldn't write bindings!");
 
     if std::env::var("DOCS_RS").is_ok() {
-        // We're building docs on docs.rs, and don't actually need to compile. Instead, just
-        // generate bindings and let docs build from that.
+        // This is a docs.rs build, which does not need to compile the C++
+        // library. Generate the bindings and let the docs build from those.
         return;
     }
 
@@ -351,10 +351,11 @@ fn main() {
             gns_src_dir.join("vcpkg.json").display()
         );
 
-        // TODO: We can't make changes outside of OUT_DIR, but we need to clone/install vcpkg,
-        //  and _only_ on Windows. Upstream GameNetworkingSockets will only find vcpkg if it is
-        //  cloned to the root of it's src/ dir; we may want to submit a patch that will let it
-        //  find vcpkg elsewhere, to avoid cloning the src/ dir to OUT_DIR.
+        // TODO: A build script must not write outside OUT_DIR, but on Windows
+        //  this needs to clone and install vcpkg. GameNetworkingSockets only
+        //  finds vcpkg when it sits at the root of the upstream src/ directory,
+        //  which forces the copy of src/ into OUT_DIR. Patching upstream to
+        //  look elsewhere would remove the need for that copy.
         let new_dir = out_dir.join("GNS");
         if new_dir.exists() {
             std::fs::remove_dir_all(&new_dir).unwrap();
@@ -426,8 +427,8 @@ fn main() {
             .unwrap();
 
         for line in protobuf.cargo_metadata {
-            // vcpkg crate doesn't have any method to specify the link metadata as static, so
-            // manually do that here
+            // The vcpkg crate cannot mark the link metadata as static, so
+            // emit it here instead.
             let line = line.replace("cargo:rustc-link-lib=", "cargo:rustc-link-lib=static=");
             println!("{}", line);
         }

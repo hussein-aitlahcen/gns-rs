@@ -1,6 +1,7 @@
-//! Integration tests for the gns library
-//! These tests verify the network communication between server and client instances
-//! using the gns library.
+//! Integration tests for the gns library.
+//!
+//! These tests run a real server and one or more real clients, then check that
+//! messages travel between them.
 
 use gns::sys::*;
 use gns::{GnsGlobal, GnsSocket, MessageSlot, SendFlags};
@@ -16,7 +17,7 @@ use std::{
 mod common;
 use common::free_port;
 
-/// Helper function to setup and run a server
+/// Starts a server on a background thread.
 fn run_server(
     port: u16,
     messages_received: Arc<Mutex<Vec<String>>>,
@@ -38,8 +39,8 @@ fn run_server(
         // Connected clients
         let mut clients = HashSet::new();
 
-        // Reused receive buffer: allocated once and borrowed by
-        // `receive_messages_into` each tick (the zero-move polling pattern).
+        // One receive buffer, allocated here and borrowed by
+        // `receive_messages_into` on every tick.
         let mut recv_buf = [const { MessageSlot::uninit() }; 100];
 
         // Main server loop
@@ -98,7 +99,7 @@ fn run_server(
     });
 }
 
-/// Helper function to setup and run a client
+/// Starts a client on a background thread.
 fn run_client(
     port: u16,
     messages_to_send: Vec<String>,
@@ -150,7 +151,10 @@ fn run_client(
         while !*client_done.lock().unwrap() {
             gns_global.poll_callbacks();
 
-            for message in client.receive_messages::<100>().expect("receive_messages failed") {
+            for message in client
+                .receive_messages::<100>()
+                .expect("receive_messages failed")
+            {
                 let msg = std::str::from_utf8(message.payload())
                     .expect("Failed to decode message")
                     .to_string();
@@ -403,7 +407,7 @@ fn test_client_connection_and_disconnection() {
     // Wait for server to start
     server_ready.wait();
 
-    // Client scope - will disconnect when it goes out of scope
+    // The client disconnects when it leaves this scope.
     {
         // Initialize GNS for client
         let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global for client");
@@ -467,9 +471,9 @@ fn test_client_connection_and_disconnection() {
     // Allow some time for the server to clean up
     thread::sleep(Duration::from_millis(500));
 
-    // Different environments end up in slightly different connection states
-    // on disconnect; reaching this point without hanging is the only thing
-    // we can portably assert.
+    // Different environments report slightly different connection states on
+    // disconnect. Reaching this point without hanging is the only portable
+    // assertion.
 }
 
 #[test]

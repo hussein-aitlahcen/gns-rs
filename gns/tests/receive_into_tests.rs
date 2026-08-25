@@ -1,13 +1,14 @@
-//! Dedicated tests for the zero-move [`GnsSocket::receive_messages_into`]
-//! variant, covering the behaviours that distinguish it from the owning
-//! [`GnsSocket::receive_messages`]:
+//! Tests for [`GnsSocket::receive_messages_into`].
 //!
-//! - a single caller-owned buffer is reused across many receive calls,
-//! - each call yields at most `buffer.len()` messages (the runtime cap is
-//!   honored — a wrong length would overflow the buffer and trip the
-//!   `batch.len() <= CAP` assertion, also caught by valgrind), and
-//! - dropping an iterator with unconsumed messages releases them without
-//!   double-freeing or leaking, and leaves the socket usable.
+//! These cover what sets it apart from [`GnsSocket::receive_messages`]:
+//!
+//! - one buffer that you own is reused across many receive calls,
+//! - each call yields at most `buffer.len()` messages, because a wrong length
+//!   would overflow the buffer and trip the `batch.len() <= CAP` assertion,
+//!   which valgrind also catches, and
+//! - dropping an iterator that still holds messages releases exactly those
+//!   messages, without a double free or a leak, and leaves the socket
+//!   usable.
 
 use gns::sys::*;
 use gns::{GnsGlobal, GnsSocket, IsClient, IsServer, MessageSlot, SendFlags};
@@ -18,12 +19,8 @@ use std::time::{Duration, Instant};
 mod common;
 use common::free_port;
 
-/// Establish a connected server/client pair, driven from a single thread.
-fn connected_pair() -> (
-    &'static GnsGlobal,
-    GnsSocket<IsServer>,
-    GnsSocket<IsClient>,
-) {
+/// Creates a connected server and client pair, both driven from one thread.
+fn connected_pair() -> (&'static GnsGlobal, GnsSocket<IsServer>, GnsSocket<IsClient>) {
     let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
     let port = free_port();
     let server = GnsSocket::new(gns_global)
@@ -59,9 +56,8 @@ fn connected_pair() -> (
     (gns_global, server, client)
 }
 
-/// All sent messages are delivered, in order, while a single small buffer is
-/// reused for every receive call — and no call ever yields more than the
-/// buffer's capacity.
+/// Every message arrives, in order, while one small buffer serves every
+/// receive call. No call yields more messages than the buffer holds.
 #[test]
 fn test_receive_messages_into_reuses_buffer_and_bounds_by_len() {
     let (gns_global, server, client) = connected_pair();
@@ -79,7 +75,8 @@ fn test_receive_messages_into_reuses_buffer_and_bounds_by_len() {
         client.send_message(msg).expect("send_message failed");
     }
 
-    // One buffer, reused for every receive call — the whole point of `_into`.
+    // One buffer, reused for every receive call. This is the point of
+    // `receive_messages_into`.
     let mut buf = [const { MessageSlot::uninit() }; CAP];
     let mut received: Vec<String> = Vec::new();
 
@@ -110,9 +107,9 @@ fn test_receive_messages_into_reuses_buffer_and_bounds_by_len() {
     }
 }
 
-/// Dropping a `receive_messages_into` iterator with unconsumed messages still
-/// in it releases exactly those messages (no double free, no leak — validated
-/// under valgrind) and the remaining messages are still delivered afterwards.
+/// Dropping a `receive_messages_into` iterator that still holds messages
+/// releases exactly those messages, with no double free and no leak. Valgrind
+/// confirms this. The remaining messages still arrive afterwards.
 #[test]
 fn test_receive_messages_into_releases_unconsumed_on_drop() {
     let (gns_global, server, client) = connected_pair();

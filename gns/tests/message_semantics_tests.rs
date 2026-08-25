@@ -1,8 +1,13 @@
-//! Covers the `Payload`-driven send path:
-//! - default impls (`Box<[u8]>`, `Vec<u8>`, `String`, `Arc<[u8]>`,
-//!   `&'static [u8]`) and a custom impl exercise `into_raw` / `FREE_FN`,
-//! - `m_nUserData` round-trips through the wrapper untouched,
-//! - `send_messages` returns failed messages in `SendOutcome::Failed`.
+//! Tests for the send path that `Payload` drives.
+//!
+//! These tests check that:
+//!
+//! - the built-in implementations (`Box<[u8]>`, `Vec<u8>`, `String`,
+//!   `Arc<[u8]>`, and `&'static [u8]`) and a custom one all free their buffer
+//!   exactly once,
+//! - the wrapper passes `m_nUserData` through unchanged,
+//! - `send_messages` gives a failed message back in `SendOutcome::Failed`, and
+//! - `into_inner` hands over the release path without releasing.
 
 use gns::sys::*;
 use gns::{GnsConnection, GnsGlobal, GnsSocket, Payload, SendFlags, SendOutcome};
@@ -38,7 +43,7 @@ fn test_box_payload_is_zero_copy() {
     assert_eq!(message.payload().len(), buffer_len);
 }
 
-/// `Arc<[u8]>::FREE_FN` must decrement the strong count on drop.
+/// Releasing an `Arc<[u8]>` message must drop one strong reference.
 #[test]
 fn test_arc_payload_is_shared_zero_copy() {
     let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
@@ -59,7 +64,8 @@ fn test_arc_payload_is_shared_zero_copy() {
     assert_eq!(Arc::strong_count(&buffer), 1);
 }
 
-/// `&'static [u8]` is no-alloc; `FREE_FN` must be a no-op.
+/// A `&'static [u8]` payload allocates nothing, so releasing it must do
+/// nothing.
 #[test]
 fn test_static_slice_payload_is_no_op_free() {
     let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
@@ -75,13 +81,14 @@ fn test_static_slice_payload_is_no_op_free() {
 
 // Third-party `Payload` impl whose free logic is expressed as ordinary
 // Rust `Drop`. Demonstrates that consumers can plug in their own free
-// behaviour without writing any `unsafe extern "C" fn` — the wrapper
+// behavior without writing any `unsafe extern "C" fn`. The wrapper
 // synthesizes the C callback from `into_raw` / `from_raw`.
 static DROPS: AtomicUsize = AtomicUsize::new(0);
 
-/// ZST whose `Drop` is the counter increment. Keeps it independent of
-/// the byte buffer's reclamation so the test can verify that the
-/// wrapper's free path runs `Self::Drop` exactly once per message.
+/// An empty type whose only job is to count its own drops.
+///
+/// Keeping the counter separate from the byte buffer lets the test check that
+/// the wrapper runs `Drop` exactly once per message.
 struct DropCounter;
 impl Drop for DropCounter {
     fn drop(&mut self) {
@@ -96,9 +103,9 @@ struct Counted {
 
 unsafe impl Payload for Counted {
     fn into_raw(self) -> (*mut u8, usize) {
-        // Disarm `Counted`'s field destructors: ownership of `bytes` is
-        // being transferred to GNS, and `_marker` should not fire its
-        // counter here — it'll fire on the reconstructed value's Drop.
+        // Hold off the field destructors. Ownership of `bytes` passes to
+        // GameNetworkingSockets, and `_marker` must not count a drop here. It
+        // counts one when the rebuilt value is dropped.
         let this = core::mem::ManuallyDrop::new(self);
         let bytes = unsafe { core::ptr::read(&this.bytes) };
         <Box<[u8]> as Payload>::into_raw(bytes)
@@ -130,6 +137,49 @@ fn test_custom_payload_drives_free_via_drop() {
     assert_eq!(DROPS.load(Ordering::SeqCst) - start, 32);
 }
 
+/// `into_inner` returns the raw pointer and forgets the wrapper.
+///
+/// If the wrapper's destructor still ran, the message would already be
+/// released by the time `into_inner` returned. Every caller that followed the
+/// documented contract would then read, and free, memory that is already free.
+///
+/// This test uses `Arc::strong_count` as the probe. Releasing an `Arc<[u8]>`
+/// message drops one strong reference, so the count shows exactly when the
+/// release path ran, and how often.
+#[test]
+fn test_into_inner_does_not_release_the_message() {
+    let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
+
+    let payload: Arc<[u8]> = Arc::from(vec![0x5Au8; 32].into_boxed_slice());
+    let message = gns_global.utils().allocate_message(
+        GnsConnection::default(),
+        SendFlags::RELIABLE,
+        Arc::clone(&payload),
+    );
+    assert_eq!(
+        Arc::strong_count(&payload),
+        2,
+        "message should hold a reference"
+    );
+
+    let raw = unsafe { message.into_inner() };
+    assert_eq!(
+        Arc::strong_count(&payload),
+        2,
+        "into_inner released the message it promised to forget"
+    );
+    // The message must still be intact for the caller that now owns it.
+    assert_eq!(unsafe { (*raw).m_cbSize }, 32);
+
+    // The caller takes over the release path, as the safety contract states.
+    unsafe { SteamAPI_SteamNetworkingMessage_t_Release(raw) };
+    assert_eq!(
+        Arc::strong_count(&payload),
+        1,
+        "the caller's release must free the payload exactly once"
+    );
+}
+
 /// The wrapper must not consume `m_nUserData`.
 #[test]
 fn test_user_data_is_preserved_by_wrapper() {
@@ -147,7 +197,7 @@ fn test_user_data_is_preserved_by_wrapper() {
     assert_eq!(message.user_data(), 0xDEAD_BEEF);
 }
 
-/// Smoke-tests every default `Payload` impl through the unsent-drop path.
+/// Drops an unsent message of every built-in `Payload` type.
 #[test]
 fn test_unsent_messages_release_each_payload_kind() {
     let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
@@ -187,8 +237,8 @@ fn test_unsent_messages_release_each_payload_kind() {
     }
 }
 
-/// Send to a bogus connection: `send_messages` must return the original
-/// message in `SendOutcome::Failed` with its payload intact.
+/// Sending to a connection that does not exist must return the original
+/// message in `SendOutcome::Failed`, with its payload intact.
 #[test]
 fn test_send_messages_returns_failed_message() {
     let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
@@ -219,16 +269,14 @@ fn test_send_messages_returns_failed_message() {
     }
 }
 
-/// First message fails because the handle does not match any live
-/// connection; GNS sets `bCurrentConnectionFailed` and short-circuits all
-/// later messages on the same handle to `result == 0`. The wrapper must
-/// surface that as `Skipped`, not `Sent(0)` (per
-/// `csteamnetworkingsockets.cpp:1364-1399`).
+/// The first message fails because its handle matches no live connection.
+/// GameNetworkingSockets then skips every later message on the same handle and
+/// reports `0` for each one. The wrapper must report those as `Skipped` rather
+/// than `Sent(0)`.
 ///
-/// The default sentinel `GnsConnection::default()` (`0`) does NOT trigger
-/// this path — it is pre-screened to `InvalidParam` before the connection
-/// loop runs (csteamnetworkingsockets.cpp:1306-1313). We use a non-zero
-/// fake handle to actually reach the second loop.
+/// The default handle `GnsConnection::default()`, which is `0`, does not reach
+/// this path. GameNetworkingSockets rejects it as `InvalidParam` before the
+/// connection loop starts, so this test uses a non-zero fake handle instead.
 #[test]
 fn test_send_messages_skipped_after_failure() {
     let gns_global = GnsGlobal::get().expect("Failed to initialize GNS global");
@@ -259,8 +307,9 @@ fn test_send_messages_skipped_after_failure() {
     );
 }
 
-/// Mixed batch: only the failing messages come back; successes are
-/// consumed by GNS and reported as `SendOutcome::Sent(seq)`.
+/// In a batch that both succeeds and fails, only the failed messages come
+/// back. GameNetworkingSockets keeps the successful ones and reports each as
+/// `SendOutcome::Sent`.
 #[test]
 fn test_send_messages_mixed_success_and_failure() {
     let port = free_port();
@@ -292,7 +341,10 @@ fn test_send_messages_mixed_success_and_failure() {
                         let _ = server.accept(event.connection());
                     }
                 }
-                for _message in server.receive_messages::<32>().expect("receive_messages failed") {
+                for _message in server
+                    .receive_messages::<32>()
+                    .expect("receive_messages failed")
+                {
                     *server_msg_count.lock().unwrap() += 1;
                 }
                 thread::sleep(Duration::from_millis(10));
