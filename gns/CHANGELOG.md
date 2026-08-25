@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/hussein-aitlahcen/gns-rs/compare/game-networking-sockets-v0.2.0...game-networking-sockets-v0.2.1) - 2026-08-25
+
+### Other
+
+- improve documentation (by @hussein-aitlahcen) - #50
+
+### Contributors
+
+* @hussein-aitlahcen
+
 ## [0.2.0](https://github.com/hussein-aitlahcen/gns-rs/compare/game-networking-sockets-v0.1.4...game-networking-sockets-v0.2.0) - 2026-06-02
 
 ### Added
