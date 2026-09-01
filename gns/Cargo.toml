@@ -1,6 +1,6 @@
 [package]
 name = "game-networking-sockets"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 description = "Rust abstraction for Valve GameNetworkingSockets library."
 license.workspace = true
@@ -14,7 +14,7 @@ readme = "../README.md"
 name = "gns"
 
 [dependencies]
-game-networking-sockets-sys = { path = "../gns-sys", version = "0.2" }
+game-networking-sockets-sys = { path = "../gns-sys", version = "0.3" }
 crossbeam-queue = "0.3"
 bitflags = "2"
 thiserror = "2"
