@@ -98,7 +98,11 @@ pub type GnsMessageNumber = u64;
 ///
 /// Most variants wrap the [`EResult`] that the underlying API returned. The
 /// rest cover setup paths that report failure without an `EResult`.
+///
+/// The enum is non-exhaustive because wrapping more of the underlying API
+/// adds variants.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum GnsError {
     #[error("GameNetworkingSockets_Init failed: {0}")]
     Init(String),
@@ -106,6 +110,8 @@ pub enum GnsError {
     Listen,
     #[error("connect failed: invalid handle")]
     Connect,
+    #[error("create socket pair failed")]
+    SocketPair,
     #[error("receive failed: invalid connection or poll group handle")]
     Receive,
     #[error("accept failed: could not set connection poll group")]
@@ -119,6 +125,18 @@ pub enum GnsError {
 }
 
 pub type GnsResult<T> = Result<T, GnsError>;
+
+/// Converts a `SteamNetworkingIPAddr` into a Rust [`IpAddr`], unmapping
+/// IPv4-mapped IPv6 addresses back to plain IPv4.
+#[inline]
+fn ip_from_steam_ip_addr(addr: &SteamNetworkingIPAddr) -> IpAddr {
+    let ipv4 = unsafe { addr.__bindgen_anon_1.m_ipv4 };
+    if ipv4.m_8zeros == 0 && ipv4.m_0000 == 0 && ipv4.m_ffff == 0xffff {
+        IpAddr::from(Ipv4Addr::from(ipv4.m_ip))
+    } else {
+        IpAddr::from(Ipv6Addr::from(unsafe { addr.__bindgen_anon_1.m_ipv6 }))
+    }
+}
 
 /// Converts an `EResult` returned by an FFI call into a [`GnsResult`].
 #[inline]
@@ -730,6 +748,17 @@ impl<T> GnsNetworkMessage<T> {
         unsafe { (*self.0).m_nMessageNumber as _ }
     }
 
+    /// Returns the local timestamp at which the message arrived, in
+    /// microseconds.
+    ///
+    /// The value shares its timebase with [`GnsUtils::local_timestamp`], so
+    /// compare the two to compute how long a message sat in the receive queue.
+    /// It is meaningless on a message you allocated yourself.
+    #[inline]
+    pub fn time_received(&self) -> SteamNetworkingMicroseconds {
+        unsafe { (*self.0).m_usecTimeReceived }
+    }
+
     #[inline]
     pub fn lane(&self) -> GnsLaneId {
         unsafe { (*self.0).m_idxLane }
@@ -844,14 +873,7 @@ impl GnsConnectionInfo {
 
     #[inline]
     pub fn remote_address(&self) -> IpAddr {
-        let ipv4 = unsafe { self.0.m_addrRemote.__bindgen_anon_1.m_ipv4 };
-        if ipv4.m_8zeros == 0 && ipv4.m_0000 == 0 && ipv4.m_ffff == 0xffff {
-            IpAddr::from(Ipv4Addr::from(ipv4.m_ip))
-        } else {
-            IpAddr::from(Ipv6Addr::from(unsafe {
-                self.0.m_addrRemote.__bindgen_anon_1.m_ipv6
-            }))
-        }
+        ip_from_steam_ip_addr(&self.0.m_addrRemote)
     }
 
     #[inline]
@@ -1048,6 +1070,78 @@ where
         } else {
             None
         }
+    }
+
+    /// Returns a verbose human-readable description of the state of a
+    /// connection, intended for diagnostics and debug dumps.
+    ///
+    /// The format is subject to change between GameNetworkingSockets versions,
+    /// so do not parse it. Returns `None` if the connection handle is invalid.
+    pub fn get_detailed_connection_status(
+        &self,
+        GnsConnection(conn): GnsConnection,
+    ) -> Option<String> {
+        let mut buf = vec![0u8; 2048];
+        loop {
+            let result = unsafe {
+                SteamAPI_ISteamNetworkingSockets_GetDetailedConnectionStatus(
+                    get_interface(),
+                    conn,
+                    buf.as_mut_ptr() as *mut std::ffi::c_char,
+                    buf.len() as _,
+                )
+            };
+            if result < 0 {
+                return None;
+            }
+            if result == 0 {
+                let text = CStr::from_bytes_until_nul(&buf).ok()?;
+                return Some(text.to_string_lossy().into_owned());
+            }
+            // The buffer was too small and `result` is the required size.
+            buf.resize(result as usize, 0);
+        }
+    }
+
+    /// Returns the debug name of a connection, previously set with
+    /// [`Self::set_connection_name`].
+    ///
+    /// Returns `None` if the connection handle is invalid.
+    pub fn get_connection_name(&self, GnsConnection(conn): GnsConnection) -> Option<String> {
+        let mut buf = [0u8; 256];
+        if unsafe {
+            SteamAPI_ISteamNetworkingSockets_GetConnectionName(
+                get_interface(),
+                conn,
+                buf.as_mut_ptr() as *mut std::ffi::c_char,
+                buf.len() as _,
+            )
+        } {
+            let name = CStr::from_bytes_until_nul(&buf).ok()?;
+            Some(name.to_string_lossy().into_owned())
+        } else {
+            None
+        }
+    }
+
+    /// Sets the debug name of a connection.
+    ///
+    /// The name shows up in diagnostics such as
+    /// [`Self::get_detailed_connection_status`] and the debug output, which
+    /// makes multi-connection logs much easier to read.
+    ///
+    /// # Errors
+    /// Returns [`GnsError::Config`] if `name` contains an interior NUL byte.
+    pub fn set_connection_name(
+        &self,
+        GnsConnection(conn): GnsConnection,
+        name: &str,
+    ) -> GnsResult<()> {
+        let c = CString::new(name).map_err(|_| GnsError::Config("interior NUL"))?;
+        unsafe {
+            SteamAPI_ISteamNetworkingSockets_SetConnectionName(get_interface(), conn, c.as_ptr());
+        }
+        Ok(())
     }
 
     pub fn flush_messages_on_connection(
@@ -1374,6 +1468,76 @@ impl GnsSocket<IsCreated> {
             })
         }
     }
+
+    /// Creates a pair of connections that talk to each other, mainly for
+    /// tests and loopback communication between parts of one process.
+    ///
+    /// With `use_network_loopback` set, the traffic goes through the local
+    /// network stack over `127.0.0.1`. Without it, the payloads take an
+    /// internal shortcut. See `ISteamNetworkingSockets::CreateSocketPair` for
+    /// the trade-offs.
+    ///
+    /// Both sockets come back in the [`IsClient`] state and already connected.
+    /// The connections are created before the wrapper can attach its
+    /// connection-state callback, so the initial transition to the connected
+    /// state never shows up in [`GnsSocket::receive_events`]. Later events,
+    /// such as the peer closing the connection, are delivered normally.
+    pub fn socket_pair(
+        self,
+        use_network_loopback: bool,
+    ) -> GnsResult<(GnsSocket<IsClient>, GnsSocket<IsClient>)> {
+        let (queue_id_a, queue_a) = self.global.create_queue();
+        let (queue_id_b, queue_b) = self.global.create_queue();
+        let mut conn_a = k_HSteamNetConnection_Invalid;
+        let mut conn_b = k_HSteamNetConnection_Invalid;
+        let ok = unsafe {
+            SteamAPI_ISteamNetworkingSockets_CreateSocketPair(
+                get_interface(),
+                &mut conn_a,
+                &mut conn_b,
+                use_network_loopback,
+                core::ptr::null(),
+                core::ptr::null(),
+            )
+        };
+        if !ok {
+            let mut queues = self.global.event_queues.write().unwrap();
+            queues.remove(&queue_id_a);
+            queues.remove(&queue_id_b);
+            return Err(GnsError::SocketPair);
+        }
+        // Build the client states first so that their `Drop` implementations
+        // close the connections and unregister the queues on any later error.
+        let make_client = |connection, queue, queue_id| GnsSocket {
+            global: self.global,
+            state: IsClient {
+                queue,
+                queue_id,
+                global: self.global,
+                connection: GnsConnection(connection),
+            },
+        };
+        let a = make_client(conn_a, queue_a, queue_id_a);
+        let b = make_client(conn_b, queue_b, queue_id_b);
+        // `CreateSocketPair` accepts no config options, so install the same
+        // callback and queue ID that `setup_common` passes at creation time.
+        for (conn, queue_id) in [(conn_a, queue_id_a), (conn_b, queue_id_b)] {
+            unsafe {
+                SteamAPI_ISteamNetworkingSockets_SetConnectionUserData(
+                    get_interface(),
+                    conn,
+                    queue_id,
+                );
+            }
+            self.global.utils().set_config_value_scoped(
+                ESteamNetworkingConfigValue::k_ESteamNetworkingConfig_Callback_ConnectionStatusChanged,
+                ESteamNetworkingConfigScope::k_ESteamNetworkingConfig_Connection,
+                conn as isize,
+                GnsConfig::Ptr(Self::on_connection_state_changed as *const fn(&SteamNetConnectionStatusChangedCallback_t) as *mut c_void),
+            )?;
+        }
+        Ok((a, b))
+    }
 }
 
 impl GnsSocket<IsServer> {
@@ -1396,6 +1560,54 @@ impl GnsSocket<IsServer> {
         }
         Ok(())
     }
+
+    /// Returns the address the listen socket is bound to.
+    ///
+    /// The address part is the unspecified address when the socket listens on
+    /// every interface, which is what an all-zeros IP passed to
+    /// [`GnsSocket::listen`] requests.
+    pub fn get_listen_socket_address(&self) -> Option<(IpAddr, u16)> {
+        let mut addr: SteamNetworkingIPAddr = unsafe { MaybeUninit::zeroed().assume_init() };
+        if unsafe {
+            SteamAPI_ISteamNetworkingSockets_GetListenSocketAddress(
+                get_interface(),
+                self.state.listen_socket.0,
+                &mut addr,
+            )
+        } {
+            Some((ip_from_steam_ip_addr(&addr), addr.m_port))
+        } else {
+            None
+        }
+    }
+
+    /// Sets a configuration value on the listen socket, for example a
+    /// connection option that every accepted connection inherits as its
+    /// default.
+    pub fn set_listen_socket_config_value(
+        &self,
+        typ: ESteamNetworkingConfigValue,
+        value: GnsConfig<'_>,
+    ) -> GnsResult<()> {
+        self.global.utils().set_config_value_scoped(
+            typ,
+            ESteamNetworkingConfigScope::k_ESteamNetworkingConfig_ListenSocket,
+            self.state.listen_socket.0 as isize,
+            value,
+        )
+    }
+
+    /// Reads a configuration value back from the listen socket.
+    pub fn get_listen_socket_config_value(
+        &self,
+        typ: ESteamNetworkingConfigValue,
+    ) -> GnsResult<GnsConfigValue> {
+        self.global.utils().get_config_value_scoped(
+            typ,
+            ESteamNetworkingConfigScope::k_ESteamNetworkingConfig_ListenSocket,
+            self.state.listen_socket.0 as isize,
+        )
+    }
 }
 
 impl GnsSocket<IsClient> {
@@ -1409,6 +1621,11 @@ impl GnsSocket<IsClient> {
 
 /// A configuration value for [`GnsUtils::set_global_config_value`] and
 /// [`GnsUtils::set_connection_config_value`].
+///
+/// The enum is non-exhaustive so that variants for further
+/// GameNetworkingSockets data types can be added. You can still construct
+/// every existing variant.
+#[non_exhaustive]
 pub enum GnsConfig<'a> {
     Float(f32),
     Int32(i32),
@@ -1419,6 +1636,25 @@ pub enum GnsConfig<'a> {
     /// A string variant that does not allocate, because `&CStr` already ends
     /// in a NUL byte.
     CStr(&'a CStr),
+    Ptr(*mut c_void),
+}
+
+/// A configuration value read back through [`GnsUtils::get_global_config_value`]
+/// and friends.
+///
+/// Unlike [`GnsConfig`], which borrows what you pass in, this type owns its
+/// data, and it distinguishes `Int64` because GameNetworkingSockets stores
+/// some values (such as connection user data) as 64-bit integers.
+///
+/// The enum is non-exhaustive because it mirrors the GameNetworkingSockets
+/// data-type enum, which can grow.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum GnsConfigValue {
+    Float(f32),
+    Int32(i32),
+    Int64(i64),
+    String(String),
     Ptr(*mut c_void),
 }
 
@@ -1571,12 +1807,210 @@ impl GnsUtils {
                     x.as_ptr(),
                 )
             },
-            GnsConfig::Ptr(_) => return Err(GnsError::Config("Ptr not supported per-connection")),
+            GnsConfig::Ptr(x) => {
+                return self.set_config_value_scoped(
+                    typ,
+                    ESteamNetworkingConfigScope::k_ESteamNetworkingConfig_Connection,
+                    conn.0 as isize,
+                    GnsConfig::Ptr(x),
+                )
+            }
         };
         if result {
             Ok(())
         } else {
             Err(GnsError::Config("SetConnectionConfigValue rejected"))
         }
+    }
+
+    /// Sets a configuration value on any scope through the generic
+    /// `SetConfigValue` entry point.
+    fn set_config_value_scoped(
+        &self,
+        typ: ESteamNetworkingConfigValue,
+        scope: ESteamNetworkingConfigScope,
+        scope_obj: isize,
+        value: GnsConfig<'_>,
+    ) -> GnsResult<()> {
+        // Owner that must outlive the FFI call.
+        let owned_string;
+        // `SetConfigValue` reads a string value directly from `pArg`, but a
+        // pointer value through one level of indirection: `pArg` must point to
+        // the pointer.
+        let (data_type, arg): (ESteamNetworkingConfigDataType, *const c_void) = match &value {
+            GnsConfig::Float(x) => (
+                ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Float,
+                x as *const f32 as _,
+            ),
+            GnsConfig::Int32(x) => (
+                ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Int32,
+                x as *const i32 as _,
+            ),
+            GnsConfig::String(x) => {
+                owned_string = CString::new(*x).map_err(|_| GnsError::Config("interior NUL"))?;
+                (
+                    ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_String,
+                    owned_string.as_ptr() as _,
+                )
+            }
+            GnsConfig::CStr(x) => (
+                ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_String,
+                x.as_ptr() as _,
+            ),
+            GnsConfig::Ptr(x) => (
+                ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Ptr,
+                x as *const *mut c_void as _,
+            ),
+        };
+        if unsafe {
+            SteamAPI_ISteamNetworkingUtils_SetConfigValue(
+                get_utils(),
+                typ,
+                scope,
+                scope_obj,
+                data_type,
+                arg,
+            )
+        } {
+            Ok(())
+        } else {
+            Err(GnsError::Config("SetConfigValue rejected"))
+        }
+    }
+
+    /// Reads a configuration value from any scope.
+    fn get_config_value_scoped(
+        &self,
+        typ: ESteamNetworkingConfigValue,
+        scope: ESteamNetworkingConfigScope,
+        scope_obj: isize,
+    ) -> GnsResult<GnsConfigValue> {
+        let mut data_type = ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Int32;
+        let mut buf = vec![0u8; 64];
+        let mut len = buf.len();
+        loop {
+            let result = unsafe {
+                SteamAPI_ISteamNetworkingUtils_GetConfigValue(
+                    get_utils(),
+                    typ,
+                    scope,
+                    scope_obj,
+                    &mut data_type,
+                    buf.as_mut_ptr() as *mut c_void,
+                    &mut len,
+                )
+            };
+            match result {
+                ESteamNetworkingGetConfigValueResult::k_ESteamNetworkingGetConfigValue_OK
+                | ESteamNetworkingGetConfigValueResult::k_ESteamNetworkingGetConfigValue_OKInherited => {
+                    break
+                }
+                ESteamNetworkingGetConfigValueResult::k_ESteamNetworkingGetConfigValue_BufferTooSmall => {
+                    // `len` now holds the required size.
+                    buf.resize(len, 0);
+                }
+                ESteamNetworkingGetConfigValueResult::k_ESteamNetworkingGetConfigValue_BadValue => {
+                    return Err(GnsError::Config("unknown config value"))
+                }
+                ESteamNetworkingGetConfigValueResult::k_ESteamNetworkingGetConfigValue_BadScopeObj => {
+                    return Err(GnsError::Config("bad scope object"))
+                }
+                _ => return Err(GnsError::Config("GetConfigValue failed")),
+            }
+        }
+        // `buf` is a byte buffer, so read the typed values unaligned.
+        let value = match data_type {
+            ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Int32 => {
+                GnsConfigValue::Int32(unsafe { (buf.as_ptr() as *const i32).read_unaligned() })
+            }
+            ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Int64 => {
+                GnsConfigValue::Int64(unsafe { (buf.as_ptr() as *const i64).read_unaligned() })
+            }
+            ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Float => {
+                GnsConfigValue::Float(unsafe { (buf.as_ptr() as *const f32).read_unaligned() })
+            }
+            ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_String => {
+                let s = CStr::from_bytes_until_nul(&buf)
+                    .map_err(|_| GnsError::Config("string value missing NUL"))?;
+                GnsConfigValue::String(s.to_string_lossy().into_owned())
+            }
+            ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Ptr => {
+                GnsConfigValue::Ptr(unsafe {
+                    (buf.as_ptr() as *const *mut c_void).read_unaligned()
+                })
+            }
+            _ => return Err(GnsError::Config("unknown config data type")),
+        };
+        Ok(value)
+    }
+
+    /// Reads a global configuration value back, the counterpart of
+    /// [`Self::set_global_config_value`].
+    #[inline]
+    pub fn get_global_config_value(
+        &self,
+        typ: ESteamNetworkingConfigValue,
+    ) -> GnsResult<GnsConfigValue> {
+        self.get_config_value_scoped(
+            typ,
+            ESteamNetworkingConfigScope::k_ESteamNetworkingConfig_Global,
+            0,
+        )
+    }
+
+    /// Reads a configuration value from one connection, the counterpart of
+    /// [`Self::set_connection_config_value`].
+    ///
+    /// A value that was never set on the connection itself comes back from the
+    /// enclosing scope, such as the listen socket or the global defaults.
+    #[inline]
+    pub fn get_connection_config_value(
+        &self,
+        conn: GnsConnection,
+        typ: ESteamNetworkingConfigValue,
+    ) -> GnsResult<GnsConfigValue> {
+        self.get_config_value_scoped(
+            typ,
+            ESteamNetworkingConfigScope::k_ESteamNetworkingConfig_Connection,
+            conn.0 as isize,
+        )
+    }
+
+    /// Returns the name, data type, and maximally specific scope of a
+    /// configuration value, or `None` if the value is unknown.
+    pub fn get_config_value_info(
+        &self,
+        typ: ESteamNetworkingConfigValue,
+    ) -> Option<(
+        &'static str,
+        ESteamNetworkingConfigDataType,
+        ESteamNetworkingConfigScope,
+    )> {
+        let mut data_type = ESteamNetworkingConfigDataType::k_ESteamNetworkingConfig_Int32;
+        let mut scope = ESteamNetworkingConfigScope::k_ESteamNetworkingConfig_Global;
+        let name = unsafe {
+            SteamAPI_ISteamNetworkingUtils_GetConfigValueInfo(
+                get_utils(),
+                typ,
+                &mut data_type,
+                &mut scope,
+            )
+        };
+        if name.is_null() {
+            None
+        } else {
+            // The name is a static string inside GameNetworkingSockets.
+            let name = unsafe { CStr::from_ptr(name) }.to_str().unwrap_or("");
+            Some((name, data_type, scope))
+        }
+    }
+
+    /// Returns the current local timestamp, in microseconds.
+    ///
+    /// The timebase starts at a value that will never be confused with an
+    /// interval, and it matches [`GnsNetworkMessage::time_received`].
+    #[inline]
+    pub fn local_timestamp(&self) -> SteamNetworkingMicroseconds {
+        unsafe { SteamAPI_ISteamNetworkingUtils_GetLocalTimestamp(get_utils()) }
     }
 }
